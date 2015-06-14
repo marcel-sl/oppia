@@ -27,10 +27,15 @@ oppia.controller('StateParamChangesEditor', [
     $scope.initStateParamChangesEditor();
   });
 
+  $scope.toggleAdvancedFeaturesVisibility = function() {
+    $scope.advancedFeaturesAreShown = !$scope.advancedFeaturesAreShown;
+  };
+
   $scope.initStateParamChangesEditor = function() {
     $scope.stateName = editorContextService.getActiveStateName();
     var stateData = explorationStatesService.getState($scope.stateName);
     $scope.stateParamChanges = stateData.param_changes || [];
+    $scope.advancedFeaturesAreShown = ($scope.stateParamChanges.length > 0);
   };
 
   $scope.saveStateParamChanges = function(newValue, oldValue) {

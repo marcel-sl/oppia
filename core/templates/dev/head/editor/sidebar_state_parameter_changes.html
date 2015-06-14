@@ -1,14 +1,20 @@
 <div ng-controller="StateParamChangesEditor" style="margin-top: 35px;">
   <div ng-if="editabilityService.isEditableOutsideTutorialMode() || stateParamChanges.length > 0">
-    <span style="font-size: 16px;">
-      <strong>State Parameter Changes (Advanced)</strong>
-    </span>
-    <span class="glyphicon glyphicon-info-sign" tooltip="These are applied at the beginning of the state." tooltip-placement="bottom" style="font-size: 12px; padding-left: 18px;"></span>
-    <md-card style="background-color: white; margin: 20px 0px; padding: 10px 10px;">
-      <param-change-editor param-changes="stateParamChanges"
-      save-param-changes="saveStateParamChanges"
-      is-editable="editabilityService.isEditableOutsideTutorialMode()">
-      </param-change-editor>
-    </md-card>
+    <div style="cursor: pointer;" ng-click="toggleAdvancedFeaturesVisibility()">
+      <strong>Advanced Features</strong>
+      <span ng-if="!advancedFeaturesAreShown" class="glyphicon glyphicon-plus-sign"></span>
+      <span ng-if="advancedFeaturesAreShown" class="glyphicon glyphicon-minus-sign"></span>
+    </div>
+    <div ng-if="advancedFeaturesAreShown">
+      <md-card style="background-color: white; margin-left: 0; margin-right: 0; padding: 10px 10px;">
+        <strong>State Parameter Changes</strong>
+        <span class="glyphicon glyphicon-info-sign" tooltip="These are applied at the beginning of the state." tooltip-placement="bottom" style="font-size: 12px; padding-left: 18px;"></span>
+        <br><br>
+        <param-change-editor param-changes="stateParamChanges"
+        save-param-changes="saveStateParamChanges"
+        is-editable="editabilityService.isEditableOutsideTutorialMode()">
+        </param-change-editor>
+      </md-card>
+    </div>
   </div>
 </div>
