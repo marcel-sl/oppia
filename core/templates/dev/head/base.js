@@ -54,9 +54,9 @@ oppia.constant('CATEGORY_LIST', [
 // Global utility methods.
 oppia.controller('Base', [
     '$scope', '$http', '$rootScope', '$window', '$timeout', '$document', '$log',
-    'warningsData', 'activeInputData', 'messengerService',
+    '$translate', 'warningsData', 'activeInputData', 'messengerService',
     function($scope, $http, $rootScope, $window, $timeout, $document, $log,
-             warningsData, activeInputData, messengerService) {
+             $translate, warningsData, activeInputData, messengerService) {
   $rootScope.DEV_MODE = GLOBALS.DEV_MODE;
 
   $scope.warningsData = warningsData;
@@ -174,4 +174,9 @@ oppia.controller('Base', [
   $timeout(function() {
     $scope.pageHasLoaded = true;
   }, 500);
+
+  // Changes the language of the translations.
+  $scope.changeLanguage = function (langKey) {
+    $translate.use(langKey);
+  };
 }]);
