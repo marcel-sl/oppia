@@ -583,6 +583,17 @@ textarea {
   }
 }
 
+@media (min-width: 768px) {
+  .oppia-gallery-exploration-pair {
+    display: flex; 
+  }
+
+  md-card.oppia-gallery-tile.protractor-test-gallery-tile {
+    margin-bottom: 5px;
+    margin-right: 10px;
+  }
+}
+
 @media (max-width: 890px) {
   .oppia-gallery-category-selector {
     display: none;
