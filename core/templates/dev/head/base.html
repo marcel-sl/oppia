@@ -20,7 +20,7 @@
     </div>
     <div ng-show="!loadingMessage">
       {% block content %}{% endblock %}
-      {% include 'language_footer.html' %}
+
     </div>
   </div>
 {%- endmacro %}
@@ -147,7 +147,7 @@
                           <ul class="dropdown-menu ng-cloak oppia-navbar-profile-dropdown" role="menu" ng-mouseover="onMouseoverProfilePictureOrDropdown($event)" ng-mouseleave="onMouseoutProfilePictureOrDropdown($event)">
                             <li>
                               <a href="/my_explorations">
-                                My Explorations
+                                <span translate>TOPNAV-MY-EXPLORATIONS</span>
                               </a>
                             </li>
                             <li>
@@ -220,6 +220,7 @@
         </div>
       </div>
 
+    {% include 'language_footer.html' %}
     {% if DEV_MODE %}
       <div class="oppia-dev-mode">
         Development Mode
