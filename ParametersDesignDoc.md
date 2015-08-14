@@ -1,7 +1,7 @@
 # Design Doc: Value Generators for Parameters #
 
 ## Status ##
-Implemented as described in [issue 47](https://code.google.com/p/oppia/issues/detail?id=47).
+Implemented as described in [issue 47](https://github.com/oppia/oppia/issues/47).
 
 ## Summary ##
   * The parameter model in Oppia is a bit confusing, and needs to be clarified.

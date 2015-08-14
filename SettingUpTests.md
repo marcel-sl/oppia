@@ -2,7 +2,7 @@
 
 Oppia has tests! These tests help ensure that the code is in a working state. (We always appreciate help with writing more tests, especially for the frontend, so [please let us know](Contributing.md) if you can help with that.)
 
-Before checking in any commits to the Oppia repository, please ensure that every single test passes by following the steps below. Also, please [start up a development server](https://code.google.com/p/oppia/wiki/GettingStarted) and click around a bit, especially in places affected by your commit, to ensure that everything is working as expected. Otherwise, people who build on top of your commit will not be able to tell if the tests or the server are failing due to their changes, or due to existing bugs in the Oppia code -- and this will be rather frustrating for them.
+Before checking in any commits to the Oppia repository, please ensure that every single test passes by following the steps below. Also, please start up a development server and click around a bit, especially in places affected by your commit, to ensure that everything is working as expected. Otherwise, people who build on top of your commit will not be able to tell if the tests or the server are failing due to their changes, or due to existing bugs in the Oppia code -- and this will be rather frustrating for them.
 
 ## Server-side tests ##
 
@@ -16,7 +16,7 @@ This script takes various flags. For example, if you want to run a particular te
     bash scripts/test.sh --test_target=core.controllers.editor_test
 ```
 
-For more information about these and other flags that can be passed to the test runner, please see the documentation at the top of the [test.sh](https://code.google.com/p/oppia/source/browse/scripts/test.sh) script.
+For more information about these and other flags that can be passed to the test runner, please see the documentation at the top of the [test.sh](https://github.com/oppia/oppia/tree/master/scripts/test.sh) script.
 
 A parameter `EXPECTED_TEST_COUNT` in `scripts/backend_tests.py` stores the total number of server side tests. After adding tests, you will need to update this parameter to reflect the new test count.
 

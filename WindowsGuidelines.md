@@ -1,4 +1,4 @@
-The following instructions outline how to install Oppia on a Windows machine and run the tests. Note that the resulting Oppia installation will omit the code interaction, which depends on a library called jsrepl that we have not figured out how to install in Windows yet. If you would like to help with fixing this, please add a comment to [issue 100](https://code.google.com/p/oppia/issues/detail?id=100) -- thanks!
+The following instructions outline how to install Oppia on a Windows machine and run the tests. Note that the resulting Oppia installation will omit the code interaction, which depends on a library called jsrepl that we have not figured out how to install in Windows yet. If you would like to help with fixing this, please add a comment to [issue 100](https://github.com/oppia/oppia/issues/100) -- thanks!
 
 ### First we'll get a development server up and running. ###
 
@@ -13,7 +13,7 @@ My Computer > Properties > Advanced System Settings > Environment Variables` and
 
 4. Install Python setuptools by downloading ez\_setup.py from https://pypi.python.org/pypi/setuptools, putting ez\_setup.py in your home directory and, in the Git Bash terminal, typing `python ez_setup.py`.
 
-5. Follow the steps [here](https://code.google.com/p/oppia/source/checkout) to git clone the oppia repository.
+5. Clone the oppia repository to your local machine. [TODO: link to steps]
 
 _The rest of these instructions assume that you are working on the latest revision of the `develop` branch. To get to this revision, ensure you're in the `oppia/` root folder, and run:_
 
@@ -45,18 +45,6 @@ _The rest of these instructions assume that you are working on the latest revisi
 
 # Doing programming work on Windows #
 
-## Configuring your Google Code username and password ##
+## Configuring your GitHub username and password ##
 
-At some point you will need to submit code to the repo, which requires you to provide login information. Google Code passwords are not very memorable and it's nice to have a way to have them transmitted automatically. In the Linux version of Git this can be done with the file ~/.netrc, but this file is ignored in Windows by Git Bash (as far as I can tell). A substitute is to code your username and password into .git/config in something like the following way:
-
-```
-[remote "origin"]
-        url=https://<username>:<password>@code.google.com/p/oppia/
-```
-
-or
-
-```
-git remote set-url origin https://username:password@code.google.com/p/oppia
-
-```
+At some point you will need to submit code to GitHub, which requires you to provide login information. See [this link](https://help.github.com/articles/set-up-git/#next-steps-authenticating-with-github-from-git) for instructions on how to set things up so you don't have to do this manually each time.

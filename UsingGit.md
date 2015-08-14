@@ -2,7 +2,7 @@
 
 This page outlines some basic git commands for developers new to Git.
 
-1. After [cloning Oppia](https://code.google.com/p/oppia/source/checkout), you can make code changes in your local directory, under oppia/ . These changes will be tracked by Git. At any time, you can check what git thinks has been changed using:
+1. After making a local clone of Oppia, you can make code changes in your local directory, under oppia/ . These changes will be tracked by Git. At any time, you can check what git thinks has been changed using:
 
 ```
    $ git status
@@ -16,7 +16,7 @@ You can also view diffs of your changes by typing:
    $ git diff
 ```
 
-2. To sync your local code with the latest updates from the code.google.com repository, run:
+2. To sync your local code with the latest updates from the GitHub repo, run:
 ```
    $ git pull
 ```
@@ -33,7 +33,7 @@ where [COMMIT\_MSG](COMMIT_MSG.md) is replaced by a commit message in quotes, e.
    $ git commit -a -m "Add a new graphical editor."
 ```
 
-4. When you are ready to push changes to the code.google.com repository, run:
+4. When you are ready to push changes to the GitHub repo, run:
 ```
    $ git push origin develop
 ```
@@ -48,8 +48,7 @@ If the push is successful, you should see something like this:
    remote: Scanning pack: 100% (17/17), done.
    remote: Storing objects: 100% (17/17), done.
    remote: Processing commits: 100% (1/1), done.
-   To https://committer%40example.com@code.google.com/p/oppia/
-      2b6a42d..e7fd1e7  develop -> develop
+   ...
 ```
 
 5. To download a branch someone else created:

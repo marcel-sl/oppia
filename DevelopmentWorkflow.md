@@ -30,7 +30,7 @@ Make commits and push to your individual branch as desired:
    $ git checkout <branch-name>
    $ git merge develop
 ```
-  * Push these changes back to the code.google.com feature branch:
+  * Push these changes back to the feature branch on GitHub:
 ```
    $ git push origin <branch-name>
 ```

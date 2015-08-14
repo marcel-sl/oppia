@@ -17,7 +17,7 @@ Option 1: Use one of the hosted scripts, by including one of the following codes
   <script src="//cdnjs.cloudflare.com/ajax/libs/oppia/0.0.1/oppia-player.min.js"></script>
 ```
 
-Option 2: Download your own copy of the embedding script from the [static/scripts directory](https://code.google.com/p/oppia/source/browse/#git%2Fstatic%2Fscripts) and add it to your page as follows:
+Option 2: Download your own copy of the embedding script from the [static/scripts directory](https://github.com/oppia/oppia/tree/master/static/scripts) and add it to your page as follows:
 
 ```
   <script src="//path/to/your/oppia-player.min.js"></script>
@@ -47,7 +47,7 @@ That's it, you're done! Navigate to the page containing the exploration and chec
 
 ### Integration with particular platforms ###
 
-We also have support for integration with platforms such as [Course Builder](https://code.google.com/p/course-builder/). More information can be found in the `integrations` subdirectory of the [Oppia source code](https://code.google.com/p/oppia/source/browse/#git%2Fintegrations).
+We also have support for integration with platforms such as OpenEdX and Google Sites. More information can be found in the `integrations` subdirectory of the [Oppia source code](https://github.com/oppia/oppia/tree/master/integrations).
 
 ### Event hooks (optional) ###
 
@@ -58,4 +58,4 @@ When a learner interaction happens within an Oppia exploration, an event is emit
   };
 ```
 
-Other events are also emitted on card transitions or exploration completion. For more details, please see the bottom of the [embedding script file](https://code.google.com/p/oppia/source/browse/static/scripts/oppia-player-0.0.1.js).
+Other events are also emitted on card transitions or exploration completion. For more details, please see the bottom of the [embedding script file](https://github.com/oppia/oppia/tree/master/static/scripts/oppia-player-0.0.1.js).

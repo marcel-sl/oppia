@@ -20,7 +20,7 @@ In Oppia, such a conversation is modelled as a series of **cards**. Each card is
 
 For example, here is a screenshot of the learner view of an exploration that models the first part of the above conversation:
 
-> <img src='http://wiki.oppia.googlecode.com/git/images/three_balls.png' width='500'></li></ul>
+> <img src='https://raw.githubusercontent.com/oppia/oppia/wiki/images/three_balls.png' width='500'></li></ul>
 
 The tutor presents a question with a picture (the 'content'), and offers, as the 'interaction', an input field that allows the student to type in a number.<br>
 <br>
@@ -32,7 +32,7 @@ Based on the student's response, the tutor may decide to do different things:<br
 
 and so on. These choices are called <b>rules</b>. As responses from students come in, the rules can be edited, and new rules added -- there's no need to determine all the possible rules at the outset. Note that all this complexity is effectively hidden from the learner, since each learner playthrough resembles a linear conversation. The following screenshot shows what two different playthroughs of the same exploration look like, when placed side-by-side:<br>
 <br>
-<blockquote><img src='http://wiki.oppia.googlecode.com/git/images/three_balls_side_by_side.png' width='900'></blockquote>
+<blockquote><img src='https://raw.githubusercontent.com/oppia/oppia/wiki/images/three_balls_side_by_side.png' width='900'></blockquote>
 
 To summarize:
 

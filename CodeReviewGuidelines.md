@@ -16,9 +16,7 @@ If you want to squash commits that you previously pushed to the codesite, make a
 
 ### To request a code review ###
 
-  1. Go to the [list of changes](https://code.google.com/p/oppia/source/list) page and click "Request code review" in the sub-navbar.
-  1. Fill out the form shown. Add the main reviewer to the 'Owner' field, and other reviewers to the 'Cc' field.
-  1. Click the 'Submit' button. This creates a new issue in the issue tracker and notifies the recipient of the review request by email.
+  1. [TODO: add instructions]
 
 ### When you receive a code review request ###
 

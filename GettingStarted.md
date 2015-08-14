@@ -54,8 +54,8 @@ Oppia relies on a number of programs and third-party libraries. Many of these li
 **Important note:** We suggest that you download Oppia into a **new, empty folder** on your computer, such as ~/opensource. This is because the Oppia installation process adds sibling folders to ~/opensource/oppia, such as ~/opensource/oppia\_tools. This is done in order to separate the files and folders that should be pushed to a production server (which are all in ~/opensource/oppia) from all other files and folders.
 
 To get a copy of Oppia that you can play with on your own computer, either:
-  * (if you don't use git and just want a snapshot of the latest release) download the [latest release of Oppia](https://code.google.com/p/oppia/wiki/DevelopmentStatus), and unzip the file into a directory of your choice, or
-  * (if you have git and/or want to do development) clone the Oppia repository by following the instructions [here](https://code.google.com/p/oppia/source/checkout). If you are a developer, you may also want to checkout the `develop` branch by running the following command from the oppia/ root folder:
+  * (if you don't use git and just want a snapshot of the latest release) download the [latest release of Oppia](https://github.com/oppia/oppia/archive/master.zip) and unzip the file into a directory of your choice, or
+  * (if you have git and/or want to do development) clone the Oppia repository [ADD INSTRUCTIONS] and checkout the `develop` branch by running the following command from the oppia/ root folder:
 ```
     git checkout develop
 ```
@@ -88,11 +88,11 @@ where `{{YOUR_USERNAME}}` should be replaced by your username.
 
 2. The `start.sh` script also opens up a development server at http://localhost:8181. At this address, you should see the welcome page and be able to play with your local version of Oppia. It should look something like this:
 
-<img src='http://wiki.oppia.googlecode.com/git/images/defaultDevPage.png' width='300'>
+<img src='https://raw.githubusercontent.com/oppia/oppia/wiki/images/defaultDevPage.png' width='300'>
 
 You can also view the App Engine admin console at <a href='http://localhost:8000'>http://localhost:8000</a>.<br>
 <br>
-3. <b>Loading the demo explorations.</b> The default installation of Oppia comes with a set of <a href='http://code.google.com/p/oppia/source/browse/#git%2Fdata%2Fexplorations'>demo explorations</a>. On startup, none of these are loaded. To load the demo explorations, log in to your server as an admin, then click your username in the top-right corner and choose the 'Admin Page' option. This will open a new admin page which will allow you to load the demo explorations individually.<br>
+3. <b>Loading the demo explorations.</b> The default installation of Oppia comes with a set of <a href='https://github.com/oppia/oppia/tree/master/data/explorations'>demo explorations</a>. On startup, none of these are loaded. To load the demo explorations, log in to your server as an admin, then click your username in the top-right corner and choose the 'Admin Page' option. This will open a new admin page which will allow you to load the demo explorations individually.<br>
 <br>
 4. <b>Shutting down the development server.</b> When you are done, you can shut down the development server by typing Ctrl+C into the terminal.<br>
 <br>

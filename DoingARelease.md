@@ -2,7 +2,7 @@
 
 To release a new version of Oppia, follow the following steps:
 
-0. If any changes have been made to the integrations\_dev folder or to /static/scripts/oppia-player-0.0.0.js since the last release, run the integrations release process and test these integrations. More information can be found [here](http://code.google.com/p/oppia/source/browse/integrations_dev/build_new_release.py).
+0. If any changes have been made to the integrations\_dev folder or to /static/scripts/oppia-player-0.0.0.js since the last release, run the integrations release process and test these integrations. More information can be found [here](https://github.com/oppia/oppia/tree/master/integrations_dev/build_new_release.py).
 
 1. Run the tests:
 ```
@@ -55,39 +55,37 @@ and play with the app for a while to make sure that nothing seems amiss.
    git push origin --delete release-[VERSION_NUMBER]
 ```
 
-6. [Clone](https://code.google.com/p/oppia/source/checkout) a new copy of the Oppia repository, remove the .git subfolder, and zip everything else into a download file. If necessary, remove production files that are specific to an individual instance. Rename this file appropriately to include the date and version number, and push it to the `oppia.downloads` [repository](https://code.google.com/p/oppia/source/list?repo=downloads) using git.
-
-7. Return to the oppia/ directory, and checkout the master branch.
+6. From the oppia/ directory, and checkout the master branch.
 ```
    git checkout master
 ```
 
-8. If you want emails to be sent to the admin on job failures, specify a valid email address in feconf.ADMIN\_EMAIL\_ADDRESS and set feconf.CAN\_SEND\_EMAILS\_TO\_ADMIN to True. If you are planning to send emails to users in general, you may also wish to edit feconf.SYSTEM\_EMAIL\_ADDRESS, feconf.CAN\_SEND\_EMAILS\_TO\_USERS and feconf.DEFAULT\_EMAIL\_UPDATES\_PREFERENCE. Finally, you may also wish to edit cron.yaml and queue.yaml to change the times at which jobs are executed and the rate of job processing; if in doubt, use the default values. [**TODO**: make all these into deploy\_data settings.]
+7. If you want emails to be sent to the admin on job failures, specify a valid email address in feconf.ADMIN\_EMAIL\_ADDRESS and set feconf.CAN\_SEND\_EMAILS\_TO\_ADMIN to True. If you are planning to send emails to users in general, you may also wish to edit feconf.SYSTEM\_EMAIL\_ADDRESS, feconf.CAN\_SEND\_EMAILS\_TO\_USERS and feconf.DEFAULT\_EMAIL\_UPDATES\_PREFERENCE. Finally, you may also wish to edit cron.yaml and queue.yaml to change the times at which jobs are executed and the rate of job processing; if in doubt, use the default values. [**TODO**: make all these into deploy\_data settings.]
 
-9. Update the test app at oppiatestserver.appspot.com by running
+8. Update the test app at oppiatestserver.appspot.com by running
 ```
     python scripts/deploy.py --app_name=oppiatestserver
 ```
 Note that data that is already in the datastore remains unmodified. You can reload demo explorations and do manual operations on the data via the [App Engine console](http://appengine.google.com).
 
-10. If the `index.yaml` file has changed since the last update, update only the indexes on oppia.org by running
+9. If the `index.yaml` file has changed since the last update, update only the indexes on oppia.org by running
 ```
    ../oppia_tools/google_appengine_1.9.19/google_appengine/appcfg.py update_indexes . --oauth2
 ```
 Wait for the indexes to finish uploading before proceeding with the next step.
 
-11. Update the live server at oppia.org by running
+10. Update the live server at oppia.org by running
 ```
    python scripts/deploy.py --app_name=oppiaserver
 ```
 For this you will need the oppia.org deploy\_data folder, for which you should ask an Oppia administrator.
 
-12. After updating the server, go to the App Engine console, update the version to be served by default, and flush memcache to remove stale data.
+11. After updating the server, go to the App Engine console, update the version to be served by default, and flush memcache to remove stale data.
 
-13. If necessary, set the admin config property for the text of the post-signup email.
+12. If necessary, set the admin config property for the text of the post-signup email.
 
-14. Announce the release in the [discussion forum](https://groups.google.com/forum/?fromgroups#!aboutgroup/oppia) and the oppia-announce@ mailing list.
+13. Announce the release in the [discussion forum](https://groups.google.com/forum/?fromgroups#!aboutgroup/oppia) and the oppia-announce@ mailing list.
 
-15. Update the [Development Status](DevelopmentStatus.md) page and the links on the front page of the codesite.
+14. Update the [Development Status](DevelopmentStatus.md) page and the links on the front page of the codesite.
 
 Congratulations, you've just made a release!

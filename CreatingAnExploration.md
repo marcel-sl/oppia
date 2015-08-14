@@ -2,7 +2,7 @@
 
 After you've played an exploration, why not try your hand at making one? To do so, navigate to the gallery, and look for the "Create Exploration" button in the top navbar.
 
-> <img src='http://wiki.oppia.googlecode.com/git/images/gallery_create_button.png' width='700'></li></ul>
+> <img src='https://raw.githubusercontent.com/oppia/oppia/wiki/images/gallery_create_button.png' width='700'></li></ul>
 
 This will open a dialog box. You'll need to specify four things:<br>
 <br>

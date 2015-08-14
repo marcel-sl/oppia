@@ -4,7 +4,7 @@ One of the main features of Oppia explorations is that they can be incrementally
 
 If you want to improve an exploration, one starting point is to take a look at the answers that readers submitted. To view these, click on the "Exploration Stats" tab in the exploration editor. If any reader has viewed your exploration, you should see a page like this one:
 
-<img src='http://wiki.oppia.googlecode.com/git/images/analytics.png' width='300'>
+<img src='https://raw.githubusercontent.com/oppia/oppia/wiki/images/analytics.png' width='300'>
 
 This shows the number of times your exploration has been completed, and gives a breakdown of how often each card was reached, how often each rule for a given card was hit, and the different answers that were given by readers.<br>
 <br>

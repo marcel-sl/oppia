@@ -6,19 +6,19 @@ This page gives a walkthrough of the different parts of Oppia. You can also expl
 
 When you visit Oppia, you'll see the following splash page:
 
-<img src='http://wiki.oppia.googlecode.com/git/images/splash.png' width='1000'>
+<img src='https://raw.githubusercontent.com/oppia/oppia/wiki/images/splash.png' width='1000'>
 
 Oppia is designed to simulate a conversation. Here, the computer is asking you where the word 'Oppia' comes from. Let's make a guess by clicking one of the answers.<br>
 <br>
-<img src='http://wiki.oppia.googlecode.com/git/images/splash2.png' width='1000'>
+<img src='https://raw.githubusercontent.com/oppia/oppia/wiki/images/splash2.png' width='1000'>
 
 We selected the second option: <i>It's a nonsense word that someone made up.</i>
 
-<img src='http://wiki.oppia.googlecode.com/git/images/splash3.png' width='1000'>
+<img src='https://raw.githubusercontent.com/oppia/oppia/wiki/images/splash3.png' width='1000'>
 
 Apparently, it isn't! We now need to guess what language it is. Latin, perhaps?<br>
 <br>
-<img src='http://wiki.oppia.googlecode.com/git/images/splash4.png' width='1000'>
+<img src='https://raw.githubusercontent.com/oppia/oppia/wiki/images/splash4.png' width='1000'>
 
 So it's not Latin. But instead of the standard "wrong answer, try again", we get a rather nicely customized response! Did Oppia spontaneously generate this all by itself?<br>
 <br>
@@ -34,7 +34,7 @@ Take your time to explore! When you're done, click on the 'Gallery' tab on the n
 
 The exploration gallery is a catalog of explorations classified by category (so you can find all the mathematics explorations in one place, all the geography explorations in one place, and so on).<br>
 <br>
-<img src='http://wiki.oppia.googlecode.com/git/images/gallery.png' width='1000'>
+<img src='https://raw.githubusercontent.com/oppia/oppia/wiki/images/gallery.png' width='1000'>
 
 You can select additional categories from the dropdown menus at the top to filter the search results. For example, selecting the 'Geograph' category will allow you to see all the explorations teaching something related to mathematics that are published on the server. You can start playing any of these by clicking on its title.<br>
 <br>

@@ -4,7 +4,7 @@ Non-interactive content is content that is shown to the reader, but that does no
 
 Currently, non-interactive content can be entered via the rich-text editor, as shown below:
 
-<img src='http://wiki.oppia.googlecode.com/git/images/noninteractiveContent.png' width='300'>
+<img src='https://raw.githubusercontent.com/oppia/oppia/wiki/images/noninteractiveContent.png' width='300'>
 
 <h3>Rich-text editor extensions</h3>
 

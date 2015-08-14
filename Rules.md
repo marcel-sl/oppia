@@ -10,7 +10,7 @@ You can find the rule editor below the interaction editor. The rules are listed 
 
 In the screenshot below, there are three rules: two equality checks, and one default rule.
 
-<img src='http://wiki.oppia.googlecode.com/git/images/rules.png' width='300'>
+<img src='https://raw.githubusercontent.com/oppia/oppia/wiki/images/rules.png' width='300'>
 
 The dark blue header of each tile describes the test that is being made on the answer. This is followed by a list of possible responses from Oppia (one of which is chosen at random) and a destination card. Note that the refresh symbol (⟳) in the destination column means that, if the corresponding rule is used, Oppia will return the reader to the same card.<br>
 <br>
@@ -18,11 +18,11 @@ The dark blue header of each tile describes the test that is being made on the a
 
 To edit a rule, click on the 'Edit' button in the right-hand column. To add a new rule, click the 'Add new rule' button, and choose the type of rule you want to add. In the example below, we check whether the input text contains a given string.<br>
 <br>
-<img src='http://wiki.oppia.googlecode.com/git/images/rules1.png' width='300'>
+<img src='https://raw.githubusercontent.com/oppia/oppia/wiki/images/rules1.png' width='300'>
 
 Clicking 'Select' brings us to a new page where we can specify the details of the rule. In this case, we want to check whether the reader's answer contains the word 'factorial'.<br>
 <br>
-<img src='http://wiki.oppia.googlecode.com/git/images/rules2.png' width='300'>
+<img src='https://raw.githubusercontent.com/oppia/oppia/wiki/images/rules2.png' width='300'>
 
 In this dialog box, you can also specify the destination card, as well as the feedback given to the reader. You can enter as many feedback responses as you like; one will be chosen at random and displayed to the reader if this rule is triggered. This helps to make the conversation less stilted. If you do not specify any feedback, none will be shown to the reader.<br>
 <br>

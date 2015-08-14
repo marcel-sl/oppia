@@ -2,7 +2,7 @@
 
 On the exploration editor page, you will see a graph of interlinked cards. Clicking on any of these cards takes you to the card editor page, which will look something like this:
 
-<img src='http://wiki.oppia.googlecode.com/git/images/stateEditor.png' width='300'>
+<img src='https://raw.githubusercontent.com/oppia/oppia/wiki/images/stateEditor.png' width='300'>
 
 This page consists of four parts:<br>
 <br>

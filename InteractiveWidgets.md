@@ -16,7 +16,7 @@ You can find out more about rules on [this page](Rules.md).
 
 To specify an interaction, click "Change type" in the right column under the 'Interaction' heading.
 
-<img src='http://wiki.oppia.googlecode.com/git/images/interactiveWidget.png' width='300'>
+<img src='https://raw.githubusercontent.com/oppia/oppia/wiki/images/interactiveWidget.png' width='300'>
 
 This will open up a dialog box from which you can select a new interaction from the ones that are available.<br>
 <br>
@@ -32,6 +32,6 @@ Note that these customization options are distinct from <a href='Parameters.md'>
 
 If you would like to use an interaction that does not already exist, you can write your own, but in order to do this you will need to know how to write HTML and JavaScript code. More instructions can be found <a href='CreatingInteractions.md'>here</a>. If you believe that the interaction you write is likely to be useful more generally, please consider <a href='Contributing.md'>contributing</a> it to our source tree so that others can make use of it.<br>
 <br>
-Alternatively, you could file an issue on our <a href='http://code.google.com/p/oppia/issues/list'>issue tracker</a>, describing what type of interaction you would like, and what you would like it to do. The advantage of this is that someone might be able to help you create such a interaction; the disadvantage is that it is not guaranteed that this will happen in a timely fashion (or at all). However, if your interactions is likely to be generally useful to other users as well, the chances of it getting built are probably higher.<br>
+Alternatively, you could file an issue on our <a href='https://github.com/oppia/oppia/issues/new'>issue tracker</a>, describing what type of interaction you would like, and what you would like it to do. The advantage of this is that someone might be able to help you create such a interaction; the disadvantage is that it is not guaranteed that this will happen in a timely fashion (or at all). However, if your interactions is likely to be generally useful to other users as well, the chances of it getting built are probably higher.<br>
 <br>
 Next: <a href='Rules.md'>Rules</a>

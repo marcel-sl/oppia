@@ -1,8 +1,8 @@
 # Contributing to Oppia #
 
-Thanks for your interest in contributing to the Oppia project! There are many ways to help, and not all of them are technical -- for instance, you could create a new exploration on [oppia.org](https://www.oppia.org), or fix a bug in the [Oppia codebase](https://code.google.com/p/oppia/source/browse/).
+Thanks for your interest in contributing to the Oppia project! There are many ways to help, and not all of them are technical -- for instance, you could create a new exploration on [oppia.org](https://www.oppia.org), or fix a bug in the [Oppia codebase](https://github.com/oppia/oppia/).
 
-The rest of this page contains information about specific ways to help out. If you run into any problems, please feel free to report a bug using our [issue tracker](https://code.google.com/p/oppia/issues/list), or get help via our [discussion forum](https://groups.google.com/forum/?fromgroups#!forum/oppia).
+The rest of this page contains information about specific ways to help out. If you run into any problems, please feel free to report a bug using our [issue tracker](https://github.com/oppia/oppia/issues), or get help via our [discussion forum](https://groups.google.com/forum/?fromgroups#!forum/oppia).
 
 ### Do you like explaining things to others, and helping people learn new stuff? ###
 
@@ -12,7 +12,7 @@ If so, here is how you can help!
 
   * You could also make a really good learning experience that combines multiple Oppia explorations and/or other resources to help someone effectively learn something. It may seem as though this may not be directly helping the Oppia project, but the reason we built Oppia is to try and make it easier for people to create effective learning experiences for everyone and increase the number of such things that are available on the Web. So, if you've created something along these lines and would like to share it, we'd love to hear from you!
 
-  * When making an exploration, you might find that you would be able to convey the intuition better if only you had a particular type of functionality -- but alas, Oppia may not offer it. If that happens, please file an issue in the [issue tracker](https://code.google.com/p/oppia/issues/list) -- that way, there's at least a chance that a friendly contributor will decide to build it one day, and then you (and others) will be able to use it. But we won't know that you need it unless you tell us!
+  * When making an exploration, you might find that you would be able to convey the intuition better if only you had a particular type of functionality -- but alas, Oppia may not offer it. If that happens, please file an issue in the [issue tracker](https://github.com/oppia/oppia/issues) -- that way, there's at least a chance that a friendly contributor will decide to build it one day, and then you (and others) will be able to use it. But we won't know that you need it unless you tell us!
 
   * If you've had previous experience working with the Oppia codebase, and would like to mentor new volunteers, please tell us. We'd like to make contributing to Oppia a formative experience, and, for a newcomer to open-source development, having someone to turn to for help and advice (or just a second pair of eyes) would go a long way.
 
@@ -30,7 +30,7 @@ If so, here is how you can help!
 
 (By the way, you might also like to take a look at [this page](GettingStarted.md) for instructions on downloading a local copy of Oppia.)
 
-  * Fix a bug. We've got lots of stuff on the [issue tracker](https://code.google.com/p/oppia/issues/list) that could do with some fixing, and quite a lot of other stuff that isn't even on the issue tracker. This is a great way to get started with the codebase, so if you'd like to try your hand at addressing a small bug before diving deeper, let us know and we can find something for you!
+  * Fix a bug. We've got lots of stuff on the [issue tracker](https://github.com/oppia/oppia/issues) that could do with some fixing, and quite a lot of other stuff that isn't even on the issue tracker. This is a great way to get started with the codebase, so if you'd like to try your hand at addressing a small bug before diving deeper, let us know and we can find something for you!
 
   * Build a new feature. We have many ideas for the project, but not enough time to do all of them. These include making it easy to chain explorations into longer 'adventures', building an internationalization pipeline, improving the profile page, adding more useful information for exploration editors, allowing learners to make quick typo fixes and small edits, and many more. You might also have ideas of your own! If you are interested in working on any of these initiatives, or would like to contribute in a particular way, let us know.
 
@@ -50,7 +50,7 @@ A couple of extra pointers:
 
 If so, here is how you can help!
 
-  * Tell us about defects. Play around with Oppia, create some explorations, try to do things. If anything breaks, please tell us about it on our [issue tracker](https://code.google.com/p/oppia/issues/list) so that we can fix it! Most of the development team works with Chrome on Ubuntu Linux, so if you have a different OS or a different browser and can help us with testing that Oppia works correctly in those as well, that would be really useful.
+  * Tell us about defects. Play around with Oppia, create some explorations, try to do things. If anything breaks, please tell us about it on our [issue tracker](https://github.com/oppia/oppia/issues) so that we can fix it! Most of the development team works with Chrome on Ubuntu Linux, so if you have a different OS or a different browser and can help us with testing that Oppia works correctly in those as well, that would be really useful.
 
   * We have a bunch of documentation on our wiki. Unfortunately, it is incomplete and tends to get out of sync with the code pretty quickly. If you notice this, and would like to help us update the docs (or write new or better ones), that would be very welcome, since we don't want to mislead anyone.
 
@@ -69,5 +69,5 @@ If so ... please let us know! Oppia is a very multi-faceted project, and we'll a
 
 ### Links ###
 
-  * [Issue tracker](https://code.google.com/p/oppia/issues/list)
+  * [Issue tracker](https://github.com/oppia/oppia/issues)
   * You can reach the development team at our [mailing list](https://groups.google.com/forum/?fromgroups#!forum/oppia-dev), or by emailing admin@oppia.org.
