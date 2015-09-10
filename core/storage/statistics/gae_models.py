@@ -545,6 +545,9 @@ class StateAnswersModel(base_models.BaseModel):
     exploration_id = ndb.StringProperty(indexed=True, required=True)
     exploration_version = ndb.IntegerProperty(indexed=True, required=True)
     state_name = ndb.StringProperty(indexed=True, required=True)
+    # The version of the states blob schema.
+    states_schema_version = ndb.IntegerProperty(
+        required=True, default=0, indexed=True)
     # Store interaction type to know which calculations should be performed
     interaction_id = ndb.StringProperty(indexed=True, required=True)
     # List of answer dicts, each of which is stored as JSON blob. The content
@@ -561,12 +564,13 @@ class StateAnswersModel(base_models.BaseModel):
     @classmethod
     def create_or_update(
             cls, exploration_id, exploration_version, state_name,
-            interaction_id, answers_list):
+            states_schema_version, interaction_id, answers_list):
         entity_id = cls._get_entity_id(
             exploration_id, str(exploration_version), state_name)
         instance = cls(id=entity_id, exploration_id=exploration_id,
                        exploration_version=exploration_version,
                        state_name=state_name,
+                       states_schema_version=states_schema_version,
                        interaction_id=interaction_id,
                        answers_list=answers_list)
         return instance

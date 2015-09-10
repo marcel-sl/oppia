@@ -276,6 +276,17 @@ def record_answer(exploration_id, exploration_version, state_name,
         if exploration.states[state_name].interaction.id:
             interaction_id = exploration.states[state_name].interaction.id
 
+    # Get states_schema_version similarly to interaction_id
+    states_schema_version = None
+    if state_answers is not None:
+        states_schema_version = state_answers.states_schema_version
+
+    if states_schema_version is None:
+        exploration = exp_services.get_exploration_by_id(
+            exploration_id, version=exploration_version)
+        if exploration.states_schema_version:
+            states_schema_version = exploration.states_schema_version
+
     # Construct answer_dict and validate it
     answer_dict = {'answer_value': answer_value, 
                    'time_spent_in_sec': time_spent_in_sec,
@@ -292,7 +303,7 @@ def record_answer(exploration_id, exploration_version, state_name,
     else:
         state_answers = stats_domain.StateAnswers(
             exploration_id, exploration_version, 
-            state_name, interaction_id, [answer_dict])
+            state_name, states_schema_version, interaction_id, [answer_dict])
     _save_state_answers(state_answers)
 
 
@@ -303,8 +314,8 @@ def _save_state_answers(state_answers):
     stats_domain.StateAnswers.validate(state_answers)
     state_answers_model = stats_models.StateAnswersModel.create_or_update(
         state_answers.exploration_id, state_answers.exploration_version, 
-        state_answers.state_name, state_answers.interaction_id, 
-        state_answers.answers_list)
+        state_answers.state_name, state_answers.states_schema_version,
+        state_answers.interaction_id, state_answers.answers_list)
     state_answers_model.save()
 
 
@@ -318,6 +329,7 @@ def get_state_answers(exploration_id, exploration_version, state_name):
     if state_answers_model:
         return stats_domain.StateAnswers(
             exploration_id, exploration_version, state_name,
+            state_answers_model.states_schema_version,
             state_answers_model.interaction_id,
             state_answers_model.answers_list)
     else:

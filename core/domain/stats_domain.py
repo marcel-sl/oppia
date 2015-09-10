@@ -94,7 +94,7 @@ class StateAnswers(object):
     """Domain object containing answers of states."""
 
     def __init__(self, exploration_id, exploration_version, state_name,
-                 interaction_id, answers_list):
+                 states_schema_version, interaction_id, answers_list):
         """
         Initialize domain object for state answers.
 
@@ -108,6 +108,7 @@ class StateAnswers(object):
         self.exploration_id = exploration_id
         self.exploration_version = exploration_version
         self.state_name = state_name
+        self.states_schema_version = states_schema_version
         self.interaction_id = interaction_id
         self.answers_list = answers_list
 
