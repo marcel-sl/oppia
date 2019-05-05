@@ -14,10 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-__author__ = 'Sean Lip'
+"""Unit tests for jinja_utils.py."""
 
+# pylint: disable=relative-import
+from core.tests import test_utils
 import jinja_utils
-import test_utils
+# pylint: enable=relative-import
 
 
 class JinjaUtilsUnitTests(test_utils.GenericTestBase):
@@ -28,18 +30,18 @@ class JinjaUtilsUnitTests(test_utils.GenericTestBase):
             ('a', '\\"a\\"'),
             (2, '2'),
             (5.5, '5.5'),
-            ("'", '\\"\\\'\\"'),
+            ('\'', '\\"\\\'\\"'),
             (u'¡Hola!', '\\"\\\\u00a1Hola!\\"'),
             (['a', '¡Hola!', 2], '[\\"a\\", \\"\\\\u00a1Hola!\\", 2]'),
             ({'a': 4, '¡Hola!': 2}, '{\\"a\\": 4, \\"\\\\u00a1Hola!\\": 2}'),
             ('', '\\"\\"'),
             (None, 'null'),
             (['a', {'b': 'c', 'd': ['e', None]}],
-                '[\\"a\\", {\\"b\\": \\"c\\", \\"d\\": [\\"e\\", null]}]')
+             '[\\"a\\", {\\"b\\": \\"c\\", \\"d\\": [\\"e\\", null]}]')
         ]
 
         for tup in expected_values:
-            self.assertEqual(jinja_utils.JinjaConfig.FILTERS['js_string'](
+            self.assertEqual(jinja_utils.JINJA_FILTERS['js_string'](
                 tup[0]), tup[1])
 
     def test_parse_string(self):
@@ -62,6 +64,17 @@ class JinjaUtilsUnitTests(test_utils.GenericTestBase):
         # Integer parameters are used.
         parsed_str = jinja_utils.parse_string('int {{i}}', {'i': 2})
         self.assertEqual(parsed_str, 'int 2')
+
+        # Invalid input string is used.
+        with self.assertRaisesRegexp(
+            Exception,
+            'Unable to parse string with Jinja: {{'
+        ):
+            jinja_utils.parse_string('{{', {'a': 3, 'b': 0})
+
+        # Invalid expression is used.
+        parsed_str = jinja_utils.parse_string('{{ a/b }}', {'a': 1, 'b': 0})
+        self.assertEqual(parsed_str, unicode('[CONTENT PARSING ERROR]'))
 
     def test_evaluate_object(self):
         parsed_object = jinja_utils.evaluate_object('abc', {})
@@ -108,3 +121,14 @@ class JinjaUtilsUnitTests(test_utils.GenericTestBase):
         parsed_dict = jinja_utils.evaluate_object(orig_dict, {'b': 'c'})
         self.assertEqual(orig_dict, {'a': '{{b}}'})
         self.assertEqual(parsed_dict, {'a': 'c'})
+
+        # Test that int type input is used.
+        parsed_object = jinja_utils.evaluate_object(34, {})
+        self.assertEqual(parsed_object, 34)
+
+    def test__log2_floor_filter(self):
+        log_value = jinja_utils.JINJA_FILTERS['log2_floor'](10)
+        self.assertEqual(log_value, 3)
+
+        log_value = jinja_utils.JINJA_FILTERS['log2_floor'](0.0001)
+        self.assertEqual(log_value, -13)

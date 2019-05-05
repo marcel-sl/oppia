@@ -16,11 +16,11 @@
 
 """Tests for methods in the interaction registry."""
 
-__author__ = 'Sean Lip'
-
 from core.domain import interaction_registry
 from core.tests import test_utils
 from extensions.interactions import base
+
+EXPECTED_TERMINAL_INTERACTIONS_COUNT = 1
 
 
 class InteractionDependencyTests(test_utils.GenericTestBase):
@@ -30,17 +30,17 @@ class InteractionDependencyTests(test_utils.GenericTestBase):
         self.assertItemsEqual(
             interaction_registry.Registry.get_deduplicated_dependency_ids(
                 ['CodeRepl']),
-            ['jsrepl', 'codemirror'])
+            ['skulpt', 'codemirror', 'code_repl_prediction'])
 
         self.assertItemsEqual(
             interaction_registry.Registry.get_deduplicated_dependency_ids(
                 ['CodeRepl', 'CodeRepl', 'CodeRepl']),
-            ['jsrepl', 'codemirror'])
+            ['skulpt', 'codemirror', 'code_repl_prediction'])
 
         self.assertItemsEqual(
             interaction_registry.Registry.get_deduplicated_dependency_ids(
                 ['CodeRepl', 'LogicProof']),
-            ['jsrepl', 'codemirror', 'logic_proof'])
+            ['skulpt', 'codemirror', 'logic_proof', 'code_repl_prediction'])
 
 
 class InteractionRegistryUnitTests(test_utils.GenericTestBase):
@@ -54,7 +54,6 @@ class InteractionRegistryUnitTests(test_utils.GenericTestBase):
 
     def test_get_all_specs(self):
         """Test the get_all_specs() method."""
-        EXPECTED_TERMINAL_INTERACTIONS_COUNT = 1
 
         specs_dict = interaction_registry.Registry.get_all_specs()
         self.assertEqual(

@@ -14,16 +14,15 @@
 
 """Tests for various static pages (like the About page)."""
 
-__author__ = 'Sean Lip'
-
 from core.tests import test_utils
 
 
-class NoninteractivePagesTest(test_utils.GenericTestBase):
+class NoninteractivePagesTests(test_utils.GenericTestBase):
 
     def test_about_page(self):
         """Test the About page."""
-        response = self.testapp.get('/about')
-        self.assertEqual(response.status_int, 200)
+        response = self.get_html_response('/about')
         self.assertEqual(response.content_type, 'text/html')
-        response.mustcontain('Credits', 'Contact', 'License')
+        response.mustcontain(
+            'I18N_ABOUT_PAGE_CREDITS_TAB_HEADING',
+            'I18N_ABOUT_PAGE_FOUNDATION_TAB_PARAGRAPH_5_LICENSE_HEADING')

@@ -17,43 +17,34 @@
 import logging
 
 from core import jobs
+from core.controllers import acl_decorators
 from core.controllers import base
+from core.domain import activity_jobs_one_off
+from core.domain import email_manager
+from core.domain import recommendations_jobs_one_off
+from core.domain import suggestion_services
+from core.domain import user_jobs_one_off
 from core.platform import models
-email_services = models.Registry.import_email_services()
-(job_models,) = models.Registry.import_models([models.NAMES.job])
 import feconf
 import utils
 
 from pipeline import pipeline
 
+(job_models, suggestion_models) = models.Registry.import_models([
+    models.NAMES.job, models.NAMES.suggestion])
+
 # The default retention time is 2 days.
 MAX_MAPREDUCE_METADATA_RETENTION_MSECS = 2 * 24 * 60 * 60 * 1000
-
-
-def require_cron_or_superadmin(handler):
-    """Decorator to ensure that the handler is being called by cron or by a
-    superadmin of the application.
-    """
-    def _require_cron_or_superadmin(self, *args, **kwargs):
-        if (self.request.headers.get('X-AppEngine-Cron') is None
-                and not self.is_super_admin):
-            raise self.UnauthorizedUserException(
-                'You do not have the credentials to access this page.')
-        else:
-            return handler(self, *args, **kwargs)
-
-    return _require_cron_or_superadmin
+TWENTY_FIVE_HOURS_IN_MSECS = 25 * 60 * 60 * 1000
+MAX_JOBS_TO_REPORT_ON = 50
 
 
 class JobStatusMailerHandler(base.BaseHandler):
     """Handler for mailing admin about job failures."""
 
-    @require_cron_or_superadmin
+    @acl_decorators.can_perform_cron_tasks
     def get(self):
         """Handles GET requests."""
-        TWENTY_FIVE_HOURS_IN_MSECS = 25 * 60 * 60 * 1000
-        MAX_JOBS_TO_REPORT_ON = 50
-
         # TODO(sll): Get the 50 most recent failed shards, not all of them.
         failed_jobs = jobs.get_stuck_jobs(TWENTY_FIVE_HOURS_IN_MSECS)
         if failed_jobs:
@@ -84,11 +75,44 @@ class JobStatusMailerHandler(base.BaseHandler):
             email_subject = 'MapReduce status report'
             email_message = 'All MapReduce jobs are running fine.'
 
-        email_services.send_mail_to_admin(email_subject, email_message)
+        email_manager.send_mail_to_admin(email_subject, email_message)
+
+
+class CronDashboardStatsHandler(base.BaseHandler):
+    """Handler for appending dashboard stats to a list."""
+
+    @acl_decorators.can_perform_cron_tasks
+    def get(self):
+        """Handles GET requests."""
+        user_jobs_one_off.DashboardStatsOneOffJob.enqueue(
+            user_jobs_one_off.DashboardStatsOneOffJob.create_new())
+
+
+class CronExplorationRecommendationsHandler(base.BaseHandler):
+    """Handler for computing exploration recommendations."""
+
+    @acl_decorators.can_perform_cron_tasks
+    def get(self):
+        """Handles GET requests."""
+        job_class = (
+            recommendations_jobs_one_off.ExplorationRecommendationsOneOffJob)
+        job_class.enqueue(job_class.create_new())
+
+
+class CronActivitySearchRankHandler(base.BaseHandler):
+    """Handler for computing activity search ranks."""
+
+    @acl_decorators.can_perform_cron_tasks
+    def get(self):
+        """Handles GET requests."""
+        activity_jobs_one_off.IndexAllActivitiesJobManager.enqueue(
+            activity_jobs_one_off.IndexAllActivitiesJobManager.create_new())
 
 
 class CronMapreduceCleanupHandler(base.BaseHandler):
+    """Handler for cleaning up data items of completed map/reduce jobs."""
 
+    @acl_decorators.can_perform_cron_tasks
     def get(self):
         """Clean up intermediate data items for completed M/R jobs that
         started more than MAX_MAPREDUCE_METADATA_RETENTION_MSECS milliseconds
@@ -137,7 +161,7 @@ class CronMapreduceCleanupHandler(base.BaseHandler):
                 pline['startTimeMs'] < max_start_time_msec)
 
             if (job_started_too_long_ago or
-                (not have_start_time and job_definitely_terminated)):
+                    (not have_start_time and job_definitely_terminated)):
                 # At this point, the map/reduce pipeline is either in a
                 # terminal state, or has taken so long that there's no
                 # realistic possibility that there might be a race condition
@@ -164,3 +188,40 @@ class CronMapreduceCleanupHandler(base.BaseHandler):
                     jobs.MAPPER_PARAM_MAX_START_TIME_MSEC: max_start_time_msec
                 })
             logging.warning('Deletion jobs for auxiliary entities kicked off.')
+
+
+class CronAcceptStaleSuggestionsHandler(base.BaseHandler):
+    """Handler to accept suggestions that have no activity on them for
+    THRESHOLD_TIME_BEFORE_ACCEPT time.
+    """
+
+    @acl_decorators.can_perform_cron_tasks
+    def get(self):
+        """Handles get requests."""
+        if feconf.ENABLE_AUTO_ACCEPT_OF_SUGGESTIONS:
+            suggestions = suggestion_services.get_all_stale_suggestions()
+            for suggestion in suggestions:
+                suggestion_services.accept_suggestion(
+                    suggestion, feconf.SUGGESTION_BOT_USER_ID,
+                    suggestion_models.DEFAULT_SUGGESTION_ACCEPT_MESSAGE, None)
+
+
+class CronMailReviewersInRotationHandler(base.BaseHandler):
+    """Handler to send emails notifying reviewers that there are suggestions
+    that need reviews.
+    """
+
+    @acl_decorators.can_perform_cron_tasks
+    def get(self):
+        """Handles get requests."""
+        if feconf.SEND_SUGGESTION_REVIEW_RELATED_EMAILS:
+            score_categories = suggestion_models.get_all_score_categories()
+            for score_category in score_categories:
+                suggestions = suggestion_services.query_suggestions(
+                    [('score_category', score_category),
+                     ('status', suggestion_models.STATUS_ACCEPTED)])
+                if len(suggestions) > 0:
+                    reviewer_id = suggestion_services.get_next_user_in_rotation(
+                        score_category)
+                    email_manager.send_mail_to_notify_users_to_review(
+                        reviewer_id, score_category)

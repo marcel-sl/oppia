@@ -17,12 +17,10 @@
 In general, this script should not be run directly. Instead, invoke
 it from the command line by running
 
-    bash scripts/test.sh
+    bash scripts/run_backend_tests.sh
 
 from the oppia/ root folder.
 """
-
-__author__ = 'Sean Lip'
 
 import argparse
 import os
@@ -30,28 +28,32 @@ import sys
 import unittest
 
 CURR_DIR = os.path.abspath(os.getcwd())
-sys.path.insert(0, CURR_DIR)
-
-import feconf
-
 OPPIA_TOOLS_DIR = os.path.join(CURR_DIR, '..', 'oppia_tools')
 THIRD_PARTY_DIR = os.path.join(CURR_DIR, 'third_party')
 
 DIRS_TO_ADD_TO_SYS_PATH = [
     os.path.join(
-        OPPIA_TOOLS_DIR, 'google_appengine_1.9.19', 'google_appengine'),
-    CURR_DIR,
+        OPPIA_TOOLS_DIR, 'google_appengine_1.9.67', 'google_appengine'),
     os.path.join(OPPIA_TOOLS_DIR, 'webtest-1.4.2'),
     os.path.join(
-        OPPIA_TOOLS_DIR, 'google_appengine_1.9.19', 'google_appengine',
+        OPPIA_TOOLS_DIR, 'google_appengine_1.9.67', 'google_appengine',
         'lib', 'webob_0_9'),
-    os.path.join(CURR_DIR, 'third_party', 'bleach-1.2.2'),
-    os.path.join(THIRD_PARTY_DIR, 'html5lib-python-0.95'),
-    os.path.join(THIRD_PARTY_DIR, 'gae-mapreduce-1.9.17.0'),
+    os.path.join(OPPIA_TOOLS_DIR, 'browsermob-proxy-0.7.1'),
+    os.path.join(OPPIA_TOOLS_DIR, 'selenium-3.14.1'),
+    os.path.join(OPPIA_TOOLS_DIR, 'PIL-1.1.7'),
+    CURR_DIR,
+    os.path.join(THIRD_PARTY_DIR, 'backports.functools_lru_cache-1.5'),
+    os.path.join(THIRD_PARTY_DIR, 'bleach-1.2.2'),
     os.path.join(THIRD_PARTY_DIR, 'gae-cloud-storage-1.9.15.0'),
+    os.path.join(THIRD_PARTY_DIR, 'gae-mapreduce-1.9.17.0'),
     os.path.join(THIRD_PARTY_DIR, 'gae-pipeline-1.9.17.0'),
     os.path.join(THIRD_PARTY_DIR, 'graphy-1.0.0'),
+    os.path.join(THIRD_PARTY_DIR, 'html5lib-python-0.95'),
+    os.path.join(THIRD_PARTY_DIR, 'requests-2.10.0'),
     os.path.join(THIRD_PARTY_DIR, 'simplejson-3.7.1'),
+    os.path.join(THIRD_PARTY_DIR, 'beautifulsoup4-4.7.1'),
+    os.path.join(THIRD_PARTY_DIR, 'mutagen-1.38'),
+    os.path.join(THIRD_PARTY_DIR, 'soupsieve-1.8'),
 ]
 
 _PARSER = argparse.ArgumentParser()
@@ -67,9 +69,9 @@ def create_test_suites(test_target=None):
         raise Exception('The delimiter in test_target should be a dot (.)')
 
     loader = unittest.TestLoader()
-    return ([
-        loader.loadTestsFromName(test_target)] if test_target
-        else [loader.discover(
+    return (
+        [loader.loadTestsFromName(test_target)]
+        if test_target else [loader.discover(
             CURR_DIR, pattern='*_test.py', top_level_dir=CURR_DIR)])
 
 
@@ -87,8 +89,6 @@ def main():
                 for subtest in _iterate(test):
                     yield subtest
 
-    feconf.PLATFORM = 'gae'
-
     for directory in DIRS_TO_ADD_TO_SYS_PATH:
         if not os.path.exists(os.path.dirname(directory)):
             raise Exception('Directory %s does not exist.' % directory)
@@ -98,7 +98,7 @@ def main():
     dev_appserver.fix_sys_path()
 
     parsed_args = _PARSER.parse_args()
-    suites = create_test_suites(parsed_args.test_target)
+    suites = create_test_suites(test_target=parsed_args.test_target)
 
     results = [unittest.TextTestRunner(verbosity=2).run(suite)
                for suite in suites]

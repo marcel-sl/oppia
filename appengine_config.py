@@ -12,14 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Configuration for App Engine."""
+# pylint: skip-file
 
-__author__ = 'sll@google.com (Sean Lip)'
+"""Configuration for App Engine."""
 
 import logging
 import os
 import sys
 import time
+
+import feconf
 
 # Whether to calculate costs for RPCs, in addition to time taken.
 appstats_CALC_RPC_COSTS = True
@@ -68,15 +70,35 @@ def webapp_add_wsgi_middleware(app):
 
 # Root path of the app.
 ROOT_PATH = os.path.dirname(__file__)
+_PARENT_DIR = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
+oppia_tools_path = os.path.join(_PARENT_DIR, 'oppia_tools')
+
+# oppia_tools/ is available locally (in both dev and prod mode). However,
+# on the GAE production server, oppia_tools/ is not available, and the default
+# PIL third-party library is used instead.
+#
+# We cannot special-case this using DEV_MODE because it is possible to run
+# Oppia in production mode locally, where a built-in PIL won't be available.
+# Hence the check for oppia_tools instead.
+if os.path.isdir(oppia_tools_path):
+    pil_path = os.path.join(oppia_tools_path, 'PIL-1.1.7')
+    if not os.path.isdir(pil_path):
+        raise Exception('Invalid path for oppia_tools library: %s' % pil_path)
+    sys.path.insert(0, pil_path)
 
 THIRD_PARTY_LIBS = [
+    os.path.join(ROOT_PATH, 'third_party', 'backports.functools_lru_cache-1.5'),
     os.path.join(ROOT_PATH, 'third_party', 'bleach-1.2.2'),
     os.path.join(ROOT_PATH, 'third_party', 'html5lib-python-0.95'),
     os.path.join(ROOT_PATH, 'third_party', 'gae-mapreduce-1.9.17.0'),
     os.path.join(ROOT_PATH, 'third_party', 'gae-cloud-storage-1.9.15.0'),
     os.path.join(ROOT_PATH, 'third_party', 'gae-pipeline-1.9.17.0'),
     os.path.join(ROOT_PATH, 'third_party', 'graphy-1.0.0'),
+    os.path.join(ROOT_PATH, 'third_party', 'requests-2.10.0'),
     os.path.join(ROOT_PATH, 'third_party', 'simplejson-3.7.1'),
+    os.path.join(ROOT_PATH, 'third_party', 'beautifulsoup4-4.7.1'),
+    os.path.join(ROOT_PATH, 'third_party', 'mutagen-1.38'),
+    os.path.join(ROOT_PATH, 'third_party', 'soupsieve-1.8'),
 ]
 
 for lib_path in THIRD_PARTY_LIBS:

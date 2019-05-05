@@ -16,8 +16,6 @@
 
 """Tests for typed object classes (mostly normalization)."""
 
-__author__ = 'Sean Lip'
-
 import inspect
 
 from core.tests import test_utils
@@ -28,32 +26,27 @@ import schema_utils_test
 class ObjectNormalizationUnitTests(test_utils.GenericTestBase):
     """Tests normalization of typed objects."""
 
-    def check_normalization(self, cls, mappings, invalid_items):
+    def check_normalization(self, object_class, mappings, invalid_items):
         """Test that values are normalized correctly.
 
         Args:
-          cls: the class whose normalize() method is to be tested.
+          object_class: the class whose normalize() method is to be tested.
           mappings: a list of 2-element tuples. The first element of
             each item is expected to be normalized to the second.
           invalid_items: a list of values. Each of these is expected to raise
             a TypeError when normalized.
         """
         for item in mappings:
-            assert cls.normalize(item[0]) == item[1], (
+            assert object_class.normalize(item[0]) == item[1], (
                 'Expected %s when normalizing %s as a %s, got %s' %
-                (item[1], item[0], cls.__name__, cls.normalize(item[0]))
+                (
+                    item[1], item[0],
+                    object_class.__name__, object_class.normalize(item[0]))
             )
 
         for item in invalid_items:
             with self.assertRaises(Exception):
-                cls.normalize(item)
-
-    def test_null_validation(self):
-        """Tests objects of type Null."""
-        mappings = [('', None), ('20', None), (None, None)]
-        invalid_values = []
-
-        self.check_normalization(objects.Null, mappings, invalid_values)
+                object_class.normalize(item)
 
     def test_boolean_validation(self):
         """Tests objects of type Boolean."""
@@ -86,6 +79,15 @@ class ObjectNormalizationUnitTests(test_utils.GenericTestBase):
 
         self.check_normalization(
             objects.NonnegativeInt, mappings, invalid_vals)
+
+    def test_positive_int_validation(self):
+        """Tests objects of type PositiveInt."""
+        mappings = [(20, 20), ('20', 20), ('02', 2), (3.00, 3),
+                    (3.05, 3), ]
+        invalid_vals = ['a', '', {'a': 3}, [3], None, -1, '-1', 0, '0']
+
+        self.check_normalization(
+            objects.PositiveInt, mappings, invalid_vals)
 
     def test_code_evaluation_validation(self):
         """Tests objects of type codeEvaluation."""
@@ -139,6 +141,22 @@ class ObjectNormalizationUnitTests(test_utils.GenericTestBase):
             'G4', {'n': 1}, 2.0, None, {'readableNoteName': 'C5'}]
 
         self.check_normalization(objects.MusicPhrase, mappings, invalid_values)
+
+    def test_list_of_tabs(self):
+        """Tests objects of type ListOfDict."""
+        mappings = [([
+            {'content': '<p>Hello</p>', 'title': 'Tabs'},
+            {'content': '<iframe src="site"></iframe>', 'title': u'¡Hola!'}
+        ], [
+            {'content': '<p>Hello</p>', 'title': u'Tabs'},
+            {'content': '', 'title': u'¡Hola!'}
+        ]), ([], [])]
+        invalid_values = [
+            '123', 3.0, None, [3, 'a'],
+            [{'content': '<p>abc</p>', 'url': 'xyx'}],
+            [{'content': '<p>abc</p>', 'title': 'xyz'}, [1, 2, 3]]]
+        self.check_normalization(
+            objects.ListOfTabs, mappings, invalid_values)
 
     def test_set_of_unicode_string_validation(self):
         """Tests objects of type SetOfUnicodeString."""
@@ -215,7 +233,7 @@ class ObjectNormalizationUnitTests(test_utils.GenericTestBase):
         self.check_normalization(objects.SanitizedUrl, mappings, invalid_vals)
 
     def test_checked_proof_validation(self):
-        """Tests objects of type CheckedProof"""
+        """Tests objects of type CheckedProof."""
         valid_example_1 = {
             'assumptions_string': 'p',
             'target_string': 'q',
@@ -248,7 +266,7 @@ class ObjectNormalizationUnitTests(test_utils.GenericTestBase):
             objects.CheckedProof, mappings, invalid_values)
 
     def test_logic_question_validation(self):
-        """Tests objects of type LogicQuestion"""
+        """Tests objects of type LogicQuestion."""
         p_expression = {
             'top_kind_name': 'variable',
             'top_operator_name': 'p',
@@ -276,7 +294,7 @@ class ObjectNormalizationUnitTests(test_utils.GenericTestBase):
             objects.LogicQuestion, mappings, invalid_values)
 
     def test_logic_error_category_validation(self):
-        """Tests objects of type LogicErrorCategory"""
+        """Tests objects of type LogicErrorCategory."""
 
         mappings = [
             ('parsing', 'parsing'), ('typing', 'typing'),
@@ -288,7 +306,7 @@ class ObjectNormalizationUnitTests(test_utils.GenericTestBase):
             objects.LogicErrorCategory, mappings, invalid_values)
 
     def test_graph(self):
-        """Tests objects of type Graph"""
+        """Tests objects of type Graph."""
         empty_graph = {
             'vertices': [],
             'edges': [],
@@ -298,11 +316,11 @@ class ObjectNormalizationUnitTests(test_utils.GenericTestBase):
         }
         cycle_5_graph = {
             'vertices': [
-                {'x': 0.0, 'y': 10.0, 'label': ''}, 
-                {'x': 50.0, 'y': 10.0, 'label': ''}, 
-                {'x': 23.0, 'y': 31.0, 'label': ''}, 
-                {'x': 14.0, 'y': 5.0, 'label': ''}, 
-                {'x': 200.0, 'y': 1000.0, 'label': ''}, 
+                {'x': 0.0, 'y': 10.0, 'label': ''},
+                {'x': 50.0, 'y': 10.0, 'label': ''},
+                {'x': 23.0, 'y': 31.0, 'label': ''},
+                {'x': 14.0, 'y': 5.0, 'label': ''},
+                {'x': 200.0, 'y': 1000.0, 'label': ''},
             ],
             'edges': [
                 {'src': 0, 'dst': 1, 'weight': 1},
@@ -320,7 +338,7 @@ class ObjectNormalizationUnitTests(test_utils.GenericTestBase):
             (empty_graph, empty_graph),
             (cycle_5_graph, cycle_5_graph),
         ]
-        
+
         invalid_values = [None, 1, {}, 'string', {
             'vertices': [],
             'edges': []
@@ -377,6 +395,71 @@ class ObjectNormalizationUnitTests(test_utils.GenericTestBase):
         self.check_normalization(
             objects.Graph, mappings, invalid_values)
 
+    def test_graph_property_validation(self):
+        """Tests objects of type GraphProperty."""
+
+        mappings = [
+            ('acyclic', 'acyclic'), ('regular', 'regular'),
+            ('strongly_connected', 'strongly_connected'),
+            ('weakly_connected', 'weakly_connected')]
+
+        invalid_values = [None, 2, 'string', 'item']
+
+        self.check_normalization(
+            objects.GraphProperty, mappings, invalid_values)
+
+    def test_set_of_html_string(self):
+        """Tests objects of the type StringList."""
+
+        mappings = [(['abc', 'abb'], [u'abc', u'abb']), ([], [])]
+        invalid_values = ['123', {'a': 1}, 3.0, None, [3, 'a'], [1, 2, 1]]
+        self.check_normalization(
+            objects.SetOfHtmlString, mappings, invalid_values)
+
+    def test_fraction(self):
+        """Tests objects of type Fraction."""
+        mappings = [(
+            self._create_fraction_dict(True, 0, 0, 1),
+            self._create_fraction_dict(True, 0, 0, 1)
+        ), (
+            self._create_fraction_dict(False, 1, 2, 3),
+            self._create_fraction_dict(False, 1, 2, 3)
+        )]
+
+        invalid_values = [self._create_fraction_dict('non-boolean', 1, 2, 3),
+                          self._create_fraction_dict(True, 'non-int', 2, 3),
+                          self._create_fraction_dict(None, None, None, None),
+                          self._create_fraction_dict(False, 10, 1, -3),
+                          self._create_fraction_dict(False, -10, 11, 3),
+                          self._create_fraction_dict(False, 10, -11, 3),
+                          self._create_fraction_dict(False, -10, -11, -3),
+                          self._create_fraction_dict(False, 1, 1, 0),
+                          {},
+                          '1/3',
+                          1]
+
+        self.check_normalization(objects.Fraction, mappings, invalid_values)
+
+    def _create_fraction_dict(
+            self, is_negative, whole_number, numerator, denominator):
+        """Returns the fraction object in the dict format.
+
+        Args:
+            is_negative: bool. Whether the given fraction is negative.
+            whole_number: int. The whole number of the fraction.
+            numerator: int. The numerator part of the fraction.
+            denominator: int. The denominator part of the fraction.
+
+        Returns:
+            dict(str, *). The fraction object.
+        """
+        return {
+            'isNegative': is_negative,
+            'wholeNumber': whole_number,
+            'numerator': numerator,
+            'denominator': denominator
+        }
+
 
 class SchemaValidityTests(test_utils.GenericTestBase):
 
@@ -388,4 +471,30 @@ class SchemaValidityTests(test_utils.GenericTestBase):
                     schema_utils_test.validate_schema(member.SCHEMA)
                     count += 1
 
-        self.assertEquals(count, 21)
+        self.assertEqual(count, 38)
+
+
+class ObjectDefinitionTests(test_utils.GenericTestBase):
+
+    def test_default_values_for_objects_are_valid(self):
+        for _, member in inspect.getmembers(objects):
+            if inspect.isclass(member) and member.default_value is not None:
+                self.assertEqual(
+                    member.normalize(member.default_value),
+                    member.default_value)
+
+                # Comparing types here is necessary because 0 == False in
+                # Python. We handle the string case separately since Python
+                # treats str and unicode as different types.
+                type_error_message = (
+                    'Mismatched default value types for object class %s' %
+                    member.__name__)
+                if isinstance(member.default_value, basestring):
+                    self.assertIsInstance(
+                        member.normalize(member.default_value), basestring,
+                        msg=type_error_message)
+                else:
+                    self.assertIsInstance(
+                        member.normalize(member.default_value),
+                        type(member.default_value),
+                        msg=type_error_message)

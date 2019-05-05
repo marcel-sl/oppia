@@ -16,13 +16,11 @@
 
 """Models for Oppia recommendations."""
 
-__author__ = 'Xinyu Wu'
-
 from core.platform import models
-(base_models,) = models.Registry.import_models([models.NAMES.base_model])
 
 from google.appengine.ext import ndb
 
+(base_models,) = models.Registry.import_models([models.NAMES.base_model])
 
 TOPIC_SIMILARITIES_ID = 'topics'
 
@@ -31,9 +29,9 @@ class ExplorationRecommendationsModel(
         base_models.BaseMapReduceBatchResultsModel):
     """A list of recommended explorations similar to an exploration.
 
-    Instances of this class are keyed by exploration id."""
-
-    # Ids of recommended explorations
+    Instances of this class are keyed by exploration id.
+    """
+    # Ids of recommended explorations.
     recommended_exploration_ids = ndb.StringProperty(
         repeated=True, indexed=False)
 
@@ -48,6 +46,6 @@ class TopicSimilaritiesModel(base_models.BaseModel):
     TOPIC_SIMILARITIES_ID.
 
     Currently, topics are the same as the default categories. However, this may
-    change in the future."""
-
+    change in the future.
+    """
     content = ndb.JsonProperty(required=True)

@@ -15,8 +15,6 @@
 /**
  * @fileoverview Utilities for interacting with objects during protractor
  * tests.
- *
- * @author Jacob Davis (jacobdavis11@gmail.com)
  */
 
 var forms = require('../../core/tests/protractor_utils/forms.js');
@@ -28,19 +26,21 @@ var forms = require('../../core/tests/protractor_utils/forms.js');
 var BooleanEditor = function(elem) {
   return {
     setValue: function(value) {
-      elem.element(by.tagName('input')).isSelected().then(function(currentValue) {
-        if (value !== currentValue) {
-          elem.element(by.tagName('input')).click();
+      elem.element(by.tagName('input')).isSelected().then(
+        function(currentValue) {
+          if (value !== currentValue) {
+            elem.element(by.tagName('input')).click();
+          }
         }
-      });
+      );
     }
   };
 };
 
 var CoordTwoDim = function(elem) {
   return {
-    // coordinates is a two-element list whose elements represent latitude and
-    // longitude respectively.
+    // The 'coordinates' arg is a two-element list whose elements represent
+    // latitude and longitude respectively.
     setValue: function(coordinates) {
       elem.all(by.tagName('input')).first().clear();
       elem.all(by.tagName('input')).first().sendKeys(coordinates[0]);
@@ -64,11 +64,34 @@ var FilepathEditor = function(elem) {
   };
 };
 
+var FractionEditor = function(elem) {
+  return {
+    setValue: function(value) {
+      elem.element(by.tagName('input')).clear();
+      elem.element(by.tagName('input')).sendKeys(value);
+    },
+    expectValueToBe: function(expectedValue) {
+      elem.element(by.tagName('input')).getAttribute('value').then(
+        function(value) {
+          expect(value).toEqual(expectedValue);
+        }
+      );
+    }
+  };
+};
+
 var IntEditor = function(elem) {
   return {
     setValue: function(value) {
       elem.element(by.tagName('input')).clear();
       elem.element(by.tagName('input')).sendKeys(value);
+    },
+    expectValueToBe: function(expectedValue) {
+      elem.element(by.tagName('input')).getAttribute('value').then(
+        function(value) {
+          expect(value).toEqual(expectedValue);
+        }
+      );
     }
   };
 };
@@ -87,6 +110,13 @@ var NonnegativeIntEditor = function(elem) {
     setValue: function(value) {
       elem.element(by.tagName('input')).clear();
       elem.element(by.tagName('input')).sendKeys(value);
+    },
+    expectValueToBe: function(expectedValue) {
+      elem.element(by.tagName('input')).getAttribute('value').then(
+        function(value) {
+          expect(value).toEqual(expectedValue);
+        }
+      );
     }
   };
 };
@@ -96,6 +126,37 @@ var NormalizedStringEditor = function(elem) {
     setValue: function(value) {
       elem.element(by.tagName('input')).clear();
       elem.element(by.tagName('input')).sendKeys(value);
+    },
+    expectValueToBe: function(expectedValue) {
+      elem.element(by.tagName('input')).getAttribute('value').then(
+        function(value) {
+          expect(value).toEqual(expectedValue);
+        }
+      );
+    }
+  };
+};
+
+var NumberWithUnitsEditor = function(elem) {
+  return {
+    setValue: function(value) {
+      elem.element(by.tagName('input')).clear();
+      elem.element(by.tagName('input')).sendKeys(value);
+    },
+    expectValueToBe: function(expectedValue) {
+      elem.element(by.tagName('input')).getAttribute('value').then(
+        function(value) {
+          expect(value).toEqual(expectedValue);
+        }
+      );
+    }
+  };
+};
+
+var ParameterNameEditor = function(elem) {
+  return {
+    setValue: function(text) {
+      elem.element(by.cssContainingText('option', text)).click();
     }
   };
 };
@@ -105,6 +166,13 @@ var SanitizedUrlEditor = function(elem) {
     setValue: function(text) {
       elem.element(by.tagName('input')).clear();
       elem.element(by.tagName('input')).sendKeys(text);
+    },
+    expectValueToBe: function(expectedValue) {
+      elem.element(by.tagName('input')).getAttribute('value').then(
+        function(value) {
+          expect(value).toEqual(expectedValue);
+        }
+      );
     }
   };
 };
@@ -114,29 +182,42 @@ var UnicodeStringEditor = function(elem) {
     setValue: function(text) {
       elem.element(by.tagName('input')).clear();
       elem.element(by.tagName('input')).sendKeys(text);
+    },
+    expectValueToBe: function(expectedValue) {
+      elem.element(by.tagName('input')).getAttribute('value').then(
+        function(value) {
+          expect(value).toEqual(expectedValue);
+        }
+      );
     }
   };
 };
 
 var OBJECT_EDITORS = {
-  'Boolean': BooleanEditor,
-  'CoordTwoDim': CoordTwoDim,
-  'Filepath': FilepathEditor,
-  'Int': IntEditor,
-  'MathLatexString': MathLatexStringEditor,
-  'NonnegativeInt': NonnegativeIntEditor,
-  'NormalizedString': NormalizedStringEditor,
-  'SanitizedUrl': SanitizedUrlEditor,
-  'UnicodeString': UnicodeStringEditor
+  Boolean: BooleanEditor,
+  CoordTwoDim: CoordTwoDim,
+  Filepath: FilepathEditor,
+  Fraction: FractionEditor,
+  Int: IntEditor,
+  MathLatexString: MathLatexStringEditor,
+  NonnegativeInt: NonnegativeIntEditor,
+  NormalizedString: NormalizedStringEditor,
+  NumberWithUnits: NumberWithUnitsEditor,
+  ParameterName: ParameterNameEditor,
+  SanitizedUrl: SanitizedUrlEditor,
+  UnicodeString: UnicodeStringEditor
 };
 
 exports.BooleanEditor = BooleanEditor;
 exports.CoordTwoDim = CoordTwoDim;
+exports.FractionEditor = FractionEditor;
 exports.FilepathEditor = FilepathEditor;
 exports.IntEditor = IntEditor;
 exports.MathLatexStringEditor = MathLatexStringEditor;
 exports.NonnegativeIntEditor = NonnegativeIntEditor;
 exports.NormalizedStringEditor = NormalizedStringEditor;
+exports.NumberWithUnitsEditor = NumberWithUnitsEditor;
+exports.ParameterNameEditor = ParameterNameEditor;
 exports.SanitizedUrlEditor = SanitizedUrlEditor;
 exports.UnicodeStringEditor = UnicodeStringEditor;
 

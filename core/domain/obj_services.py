@@ -14,12 +14,13 @@
 
 """Service methods for typed instances."""
 
-__author__ = 'Sean Lip'
-
 import copy
 import inspect
+import json
 
 from extensions.objects.models import objects
+import feconf
+import utils
 
 
 class Registry(object):
@@ -30,10 +31,14 @@ class Registry(object):
 
     @classmethod
     def _refresh_registry(cls):
+        """Refreshes the registry by adding new object instances to the
+        registry.
+        """
         cls.objects_dict.clear()
 
         # Add new object instances to the registry.
-        for name, clazz in inspect.getmembers(objects, inspect.isclass):
+        for name, clazz in inspect.getmembers(
+                objects, predicate=inspect.isclass):
             if name.endswith('_test') or name == 'BaseObject':
                 continue
 
@@ -55,7 +60,8 @@ class Registry(object):
         """Gets an object class by its type. Types are CamelCased.
 
         Refreshes once if the class is not found; subsequently, throws an
-        error."""
+        error.
+        """
         if obj_type not in cls.objects_dict:
             cls._refresh_registry()
         if obj_type not in cls.objects_dict:
@@ -63,13 +69,9 @@ class Registry(object):
         return cls.objects_dict[obj_type]
 
 
-def get_all_object_editor_js_templates():
-    """Returns a string containing the JS templates for all objects."""
-    object_editors_js = ''
+def get_default_object_values():
+    """Returns a dictionary containing the default object values."""
+    # TODO(wxy): Cache this as it is accessed many times.
 
-    all_object_classes = Registry.get_all_object_classes()
-    for obj_type, obj_cls in all_object_classes.iteritems():
-        if obj_cls.has_editor_js_template():
-            object_editors_js += obj_cls.get_editor_js_template()
-
-    return object_editors_js
+    return json.loads(
+        utils.get_file_contents(feconf.OBJECT_DEFAULT_VALUES_FILE_PATH))

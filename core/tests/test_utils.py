@@ -18,28 +18,46 @@
 
 import contextlib
 import copy
-import datetime
+import inspect
+import itertools
+import json
 import os
 import re
 import unittest
-import webtest
 
-from core.controllers import reader
-from core.domain import config_domain
+from constants import constants
+from core.domain import collection_domain
+from core.domain import collection_services
 from core.domain import exp_domain
 from core.domain import exp_services
+from core.domain import question_domain
+from core.domain import question_services
 from core.domain import rights_manager
+from core.domain import skill_domain
+from core.domain import skill_services
+from core.domain import state_domain
+from core.domain import story_domain
+from core.domain import story_services
+from core.domain import topic_domain
+from core.domain import topic_services
+from core.domain import user_services
 from core.platform import models
-(exp_models,) = models.Registry.import_models([models.NAMES.exploration])
-current_user_services = models.Registry.import_current_user_services()
 import feconf
-import jinja_utils
 import main
+import main_mail
+import main_taskqueue
 import utils
 
-import inspect
-import json
+from google.appengine.api import apiproxy_stub
+from google.appengine.api import apiproxy_stub_map
+from google.appengine.api import mail
+import webtest
 
+(exp_models, question_models, skill_models, story_models, topic_models,) = (
+    models.Registry.import_models([
+        models.NAMES.exploration, models.NAMES.question, models.NAMES.skill,
+        models.NAMES.story, models.NAMES.topic]))
+current_user_services = models.Registry.import_current_user_services()
 
 CSRF_REGEX = (
     r'csrf_token: JSON\.parse\(\'\\\"([A-Za-z0-9/=_-]+)\\\"\'\)')
@@ -48,6 +66,7 @@ LOG_LINE_PREFIX = 'LOG_INFO_TEST: '
 
 
 def empty_environ():
+    """Create an empty environment for the tests."""
     os.environ['AUTH_DOMAIN'] = 'example.com'
     os.environ['SERVER_NAME'] = 'localhost'
     os.environ['HTTP_HOST'] = 'localhost'
@@ -57,6 +76,53 @@ def empty_environ():
     os.environ['USER_IS_ADMIN'] = '0'
     os.environ['DEFAULT_VERSION_HOSTNAME'] = '%s:%s' % (
         os.environ['HTTP_HOST'], os.environ['SERVER_PORT'])
+
+
+class URLFetchServiceMock(apiproxy_stub.APIProxyStub):
+    """Mock for google.appengine.api.urlfetch."""
+
+    def __init__(self, service_name='urlfetch'):
+        super(URLFetchServiceMock, self).__init__(service_name)
+        self.return_values = {}
+        self.response = None
+        self.request = None
+
+    def set_return_values(self, content='', status_code=200, headers=None):
+        """Set the content, status_code and headers to return in subsequent
+        calls to the urlfetch mock.
+
+        Args:
+            content: str. The content to return in subsequent calls to the
+                urlfetch mock.
+            status_code: int. The status_code to return in subsequent calls to
+                the urlfetch mock.
+            headers: dict. The headers to return in subsequent calls to the
+                urlfetch mock. The keys of this dict are strings that represent
+                the header name and each value represents the corresponding
+                value of that header.
+        """
+        self.return_values['content'] = content
+        self.return_values['status_code'] = status_code
+        self.return_values['headers'] = headers
+
+    def _Dynamic_Fetch(self, request, response): # pylint: disable=invalid-name
+        """Simulates urlfetch mock by setting request & response object.
+
+        Args:
+            request: dict. Request object for the URLMock.
+            response: dict. Response object for the URLMock.
+        """
+        return_values = self.return_values
+        response.set_content(return_values.get('content', ''))
+        response.set_statuscode(return_values.get('status_code', 200))
+        for header_key, header_value in return_values.get(
+                'headers', {}).items():
+            new_header = response.add_header()
+            new_header.set_key(header_key)
+            new_header.set_value(header_value)
+
+        self.request = request
+        self.response = response
 
 
 class TestBase(unittest.TestCase):
@@ -83,8 +149,15 @@ class TestBase(unittest.TestCase):
     OWNER_USERNAME = 'owner'
     EDITOR_EMAIL = 'editor@example.com'
     EDITOR_USERNAME = 'editor'
+    TOPIC_MANAGER_EMAIL = 'topicmanager@example.com'
+    TOPIC_MANAGER_USERNAME = 'topicmanager'
+    TRANSLATOR_EMAIL = 'translator@example.com'
+    TRANSLATOR_USERNAME = 'translator'
     VIEWER_EMAIL = 'viewer@example.com'
     VIEWER_USERNAME = 'viewer'
+    NEW_USER_EMAIL = 'new.user@example.com'
+    NEW_USER_USERNAME = 'newuser'
+    DEFAULT_END_STATE_NAME = 'End'
 
     VERSION_0_STATES_DICT = {
         feconf.DEFAULT_INIT_STATE_NAME: {
@@ -102,21 +175,328 @@ class TestBase(unittest.TestCase):
                         'definition': {'rule_type': 'default'}
                     }]
                 }]
-            }
+            },
         }
     }
 
+    VERSION_27_STATE_DICT = {
+        'content': {'content_id': u'content', 'html': u''},
+        'param_changes': [],
+        'content_ids_to_audio_translations': {
+            u'content': {},
+            u'default_outcome': {},
+            u'hint_1': {},
+            u'solution': {}
+        },
+        'written_translations': {
+            'translations_mapping': {
+                u'content': {},
+                u'default_outcome': {},
+                u'hint_1': {},
+                u'solution': {}
+            }
+        },
+        'interaction': {
+            'solution': {
+                'correct_answer': u'Solution',
+                'explanation': {
+                    'content_id': u'solution',
+                    'html': u'Solution explanation'
+                },
+                'answer_is_exclusive': False
+            },
+            'answer_groups': [],
+            'default_outcome': {
+                'param_changes': [],
+                'feedback': {
+                    'content_id': u'default_outcome',
+                    'html': u''
+                },
+                'dest': None,
+                'refresher_exploration_id': None,
+                'missing_prerequisite_skill_id': None,
+                'labelled_as_correct': True
+            },
+            'customization_args': {
+                u'rows': 1,
+                u'placeholder': u'Enter text here'
+            },
+            'confirmed_unclassified_answers': [],
+            'id': u'TextInput',
+            'hints': [{
+                'hint_content': {
+                    'content_id': u'hint_1',
+                    'html': u'Hint 1'
+                }
+            }]
+        },
+        'classifier_model_id': None
+    }
+
+    VERSION_21_STATE_DICT = {
+        'END': {
+            'classifier_model_id': None,
+            'content': {
+                'content_id': 'content',
+                'html': 'Congratulations, you have finished!'},
+            'content_ids_to_audio_translations': {
+                'content': {}},
+            'interaction': {
+                'answer_groups': [],
+                'confirmed_unclassified_answers': [],
+                'customization_args': {
+                    'recommendedExplorationIds': {'value': []}},
+                'default_outcome': None,
+                'hints': [],
+                'id': 'EndExploration',
+                'solution': None
+            },
+            'param_changes': []
+        },
+        'Introduction': {
+            'classifier_model_id': None,
+            'content': {
+                'content_id': 'content',
+                'html': ''
+            },
+            'content_ids_to_audio_translations': {
+                'content': {},
+                'default_outcome': {},
+                'feedback_1': {}
+            },
+            'interaction': {
+                'answer_groups': [{
+                    'outcome': {
+                        'dest': 'END',
+                        'feedback': {
+                            'content_id': 'feedback_1',
+                            'html': 'Correct!'},
+                        'labelled_as_correct': False,
+                        'missing_prerequisite_skill_id': None,
+                        'param_changes': [],
+                        'refresher_exploration_id': None},
+                    'rule_specs': [{
+                        'inputs': {'x': 'InputString'},
+                        'rule_type': 'Equals'}],
+                    'tagged_misconception_id': None,
+                    'training_data': ['answer1', 'answer2', 'answer3']}],
+                'confirmed_unclassified_answers': [],
+                'customization_args': {
+                    'placeholder': {'value': ''},
+                    'rows': {'value': 1}},
+                'default_outcome': {
+                    'dest': 'Introduction',
+                    'feedback': {
+                        'content_id': 'default_outcome',
+                        'html': ''},
+                    'labelled_as_correct': False,
+                    'missing_prerequisite_skill_id': None,
+                    'param_changes': [],
+                    'refresher_exploration_id': None},
+                'hints': [],
+                'id': 'TextInput',
+                'solution': None
+            },
+            'param_changes': []
+        }
+    }
+
+
+    VERSION_1_STORY_CONTENTS_DICT = {
+        'nodes': [{
+            'outline': u'',
+            'exploration_id': None,
+            'destination_node_ids': [],
+            'outline_is_finalized': False,
+            'acquired_skill_ids': [],
+            'id': 'node_1',
+            'title': 'Chapter 1',
+            'prerequisite_skill_ids': []}],
+        'initial_node_id': 'node_1',
+        'next_node_id': 'node_2'
+    }
+
+    VERSION_1_SUBTOPIC_DICT = {
+        'skill_ids': [],
+        'id': 1,
+        'title': 'A subtitle'
+    }
+
+    # Dictionary-like data structures within sample YAML must be formatted
+    # alphabetically to match string equivalence with YAML generation tests.
+    #
+    # If evaluating differences in YAML, conversion to dict form via
+    # utils.dict_from_yaml can isolate differences quickly.
+
+    SAMPLE_YAML_CONTENT = ("""author_notes: ''
+auto_tts_enabled: true
+blurb: ''
+category: Category
+correctness_feedback_enabled: false
+init_state_name: %s
+language_code: en
+objective: ''
+param_changes: []
+param_specs: {}
+schema_version: %d
+states:
+  %s:
+    classifier_model_id: null
+    content:
+      content_id: content
+      html: ''
+    content_ids_to_audio_translations:
+      content: {}
+      default_outcome: {}
+    interaction:
+      answer_groups: []
+      confirmed_unclassified_answers: []
+      customization_args: {}
+      default_outcome:
+        dest: %s
+        feedback:
+          content_id: default_outcome
+          html: ''
+        labelled_as_correct: false
+        missing_prerequisite_skill_id: null
+        param_changes: []
+        refresher_exploration_id: null
+      hints: []
+      id: null
+      solution: null
+    param_changes: []
+    written_translations:
+      translations_mapping:
+        content: {}
+        default_outcome: {}
+  New state:
+    classifier_model_id: null
+    content:
+      content_id: content
+      html: ''
+    content_ids_to_audio_translations:
+      content: {}
+      default_outcome: {}
+    interaction:
+      answer_groups: []
+      confirmed_unclassified_answers: []
+      customization_args: {}
+      default_outcome:
+        dest: New state
+        feedback:
+          content_id: default_outcome
+          html: ''
+        labelled_as_correct: false
+        missing_prerequisite_skill_id: null
+        param_changes: []
+        refresher_exploration_id: null
+      hints: []
+      id: null
+      solution: null
+    param_changes: []
+    written_translations:
+      translations_mapping:
+        content: {}
+        default_outcome: {}
+states_schema_version: %d
+tags: []
+title: Title
+""") % (
+    feconf.DEFAULT_INIT_STATE_NAME,
+    exp_domain.Exploration.CURRENT_EXP_SCHEMA_VERSION,
+    feconf.DEFAULT_INIT_STATE_NAME,
+    feconf.DEFAULT_INIT_STATE_NAME,
+    feconf.CURRENT_STATE_SCHEMA_VERSION)
+
+    SAMPLE_UNTITLED_YAML_CONTENT = ("""author_notes: ''
+blurb: ''
+default_skin: conversation_v1
+init_state_name: %s
+language_code: en
+objective: ''
+param_changes: []
+param_specs: {}
+schema_version: %d
+states:
+  %s:
+    content:
+    - type: text
+      value: ''
+    interaction:
+      answer_groups: []
+      confirmed_unclassified_answers: []
+      customization_args: {}
+      default_outcome:
+        dest: %s
+        feedback: []
+        labelled_as_correct: false
+        missing_prerequisite_skill_id: null
+        param_changes: []
+        refresher_exploration_id: null
+      fallbacks: []
+      id: null
+    param_changes: []
+  New state:
+    content:
+    - type: text
+      value: ''
+    interaction:
+      answer_groups: []
+      confirmed_unclassified_answers: []
+      customization_args: {}
+      default_outcome:
+        dest: New state
+        feedback: []
+        labelled_as_correct: false
+        missing_prerequisite_skill_id: null
+        param_changes: []
+        refresher_exploration_id: null
+      fallbacks: []
+      id: null
+    param_changes: []
+states_schema_version: %d
+tags: []
+""") % (
+    feconf.DEFAULT_INIT_STATE_NAME,
+    exp_domain.Exploration.LAST_UNTITLED_SCHEMA_VERSION,
+    feconf.DEFAULT_INIT_STATE_NAME,
+    feconf.DEFAULT_INIT_STATE_NAME,
+    feconf.CURRENT_STATE_SCHEMA_VERSION)
+
     def _get_unicode_test_string(self, suffix):
+        """Returns a string that contains unicode characters and ends with the
+        given suffix. This is used to test that functions behave correctly
+        when handling strings with unicode characters.
+
+        Args:
+            suffix: str. The suffix to append to the UNICODE_TEST_STRING.
+
+        Returns:
+            str. A string that contains unicode characters and ends with the
+                given suffix.
+        """
         return '%s%s' % (self.UNICODE_TEST_STRING, suffix)
 
     def setUp(self):
+        """Initializes the fixture for the test suite. Subclasses of TestBase
+        should override this method.
+        """
         raise NotImplementedError
 
     def tearDown(self):
+        """Cleans up the fixture after the test runs. Subclasses of
+        TestBase should override this method.
+        """
         raise NotImplementedError
 
+    def _assert_validation_error(self, item, error_substring):
+        """Checks that the given item passes default validation."""
+        with self.assertRaisesRegexp(utils.ValidationError, error_substring):
+            item.validate()
+
     def signup_superadmin_user(self):
-        """Signs up a superadmin user. Should be called at the end of setUp().
+        """Signs up a superadmin user. Should be called at the end of
+        setUp().
         """
         self.signup('tmpsuperadmin@example.com', 'tmpsuperadm1n')
 
@@ -127,6 +507,9 @@ class TestBase(unittest.TestCase):
         print '%s%s' % (LOG_LINE_PREFIX, line)
 
     def _delete_all_models(self):
+        """Deletes all keys from the NDB datastore. Subclasses of TestBase
+        should override this method.
+        """
         raise NotImplementedError
 
     def _stash_current_user_env(self):
@@ -135,7 +518,7 @@ class TestBase(unittest.TestCase):
         Developers: please don't use this method outside this class -- it makes
         the individual tests harder to follow.
         """
-        self.stashed_user_env = {
+        self.stashed_user_env = {  # pylint: disable=attribute-defined-outside-init
             'USER_EMAIL': os.environ['USER_EMAIL'],
             'USER_ID': os.environ['USER_ID'],
             'USER_IS_ADMIN': os.environ['USER_IS_ADMIN']
@@ -153,14 +536,21 @@ class TestBase(unittest.TestCase):
         for key in self.stashed_user_env:
             os.environ[key] = self.stashed_user_env[key]
 
-        self.stashed_user_env = None
+        self.stashed_user_env = None  # pylint: disable=attribute-defined-outside-init
 
     def login(self, email, is_super_admin=False):
+        """Sets the environment variables to simulate a login.
+
+        Args:
+            email: str. The email of the user who is to be logged in.
+            is_super_admin: bool. Whether the user is a super admin.
+       """
         os.environ['USER_EMAIL'] = email
         os.environ['USER_ID'] = self.get_user_id_from_email(email)
         os.environ['USER_IS_ADMIN'] = '1' if is_super_admin else '0'
 
     def logout(self):
+        """Simulates a logout by resetting the environment variables."""
         os.environ['USER_EMAIL'] = ''
         os.environ['USER_ID'] = ''
         os.environ['USER_IS_ADMIN'] = '0'
@@ -174,154 +564,529 @@ class TestBase(unittest.TestCase):
         """Returns the expected login URL."""
         return current_user_services.create_login_url(slug)
 
-    def get_expected_logout_url(self, slug):
-        """Returns the expected logout URL."""
-        return current_user_services.create_logout_url(slug)
+    def _get_response(
+            self, url, expected_content_type, params=None,
+            expected_status_int=200):
+        """Get a response, transformed to a Python object.
 
-    def _parse_json_response(self, json_response, expect_errors=False):
+        Args:
+            url: str. The URL to fetch the response.
+            expected_content_type: str. The content type to expect.
+            params: dict. A dictionary that will be encoded into a query string.
+            expected_status_int: int. The integer status code to expect. Will
+                be 200 if not specified.
+
+        Returns:
+            webtest.TestResponse. The test response.
+        """
+        if params is not None:
+            self.assertTrue(isinstance(params, dict))
+
+        expect_errors = False
+        if expected_status_int >= 400:
+            expect_errors = True
+
+        response = self.testapp.get(
+            url, params, expect_errors=expect_errors,
+            status=expected_status_int)
+
+        # Testapp takes in a status parameter which is the expected status of
+        # the response. However this expected status is verified only when
+        # expect_errors=False. For other situations we need to explicitly check
+        # the status.
+        # Reference URL:
+        # https://github.com/Pylons/webtest/blob/
+        # bf77326420b628c9ea5431432c7e171f88c5d874/webtest/app.py#L1119 .
+        self.assertEqual(response.status_int, expected_status_int)
+        if not expect_errors:
+            self.assertTrue(response.status_int >= 200 and
+                            response.status_int < 400)
+        else:
+            self.assertTrue(response.status_int >= 400)
+        self.assertEqual(
+            response.content_type, expected_content_type)
+
+        return response
+
+    def get_html_response(self, url, params=None, expected_status_int=200):
+        """Get a HTML response, transformed to a Python object.
+
+        Args:
+            url: str. The URL to fetch the response.
+            params: dict. A dictionary that will be encoded into a query string.
+            expected_status_int: int. The integer status code to expect. Will
+                be 200 if not specified.
+
+        Returns:
+            webtest.TestResponse. The test response.
+        """
+        response = self._get_response(
+            url, 'text/html', params=params,
+            expected_status_int=expected_status_int)
+
+        return response
+
+    def get_custom_response(
+            self, url, expected_content_type, params=None,
+            expected_status_int=200):
+        """Get a response other than HTML or JSON, transformed to a Python
+        object.
+
+        Args:
+            url: str. The URL to fetch the response.
+            expected_content_type: str. The content type to expect.
+            params: dict. A dictionary that will be encoded into a query string.
+            expected_status_int: int. The integer status code to expect. Will
+                be 200 if not specified.
+
+        Returns:
+            webtest.TestResponse. The test response.
+        """
+        self.assertNotIn(
+            expected_content_type, ['text/html', 'application/json'])
+
+        response = self._get_response(
+            url, expected_content_type, params=params,
+            expected_status_int=expected_status_int)
+
+        return response
+
+    def get_response_without_checking_for_errors(
+            self, url, expected_status_int_list, params=None):
+        """Get a response, transformed to a Python object and
+        checks for a list of status codes.
+
+        Args:
+            url: str. The URL to fetch the response.
+            expected_status_int_list: list(int). A list of integer status
+                code to expect.
+            params: dict. A dictionary that will be encoded into a query string.
+
+        Returns:
+            webtest.TestResponse. The test response.
+        """
+        if params is not None:
+            self.assertTrue(isinstance(params, dict))
+
+        response = self.testapp.get(url, params, expect_errors=True)
+
+        self.assertIn(response.status_int, expected_status_int_list)
+
+        return response
+
+    def _parse_json_response(self, json_response, expect_errors):
         """Convert a JSON server response to an object (such as a dict)."""
         if not expect_errors:
-            self.assertEqual(json_response.status_int, 200)
-
+            self.assertTrue(
+                json_response.status_int >= 200 and
+                json_response.status_int < 400)
+        else:
+            self.assertTrue(json_response.status_int >= 400)
         self.assertEqual(
-            json_response.content_type, 'application/javascript')
+            json_response.content_type, 'application/json')
         self.assertTrue(json_response.body.startswith(feconf.XSSI_PREFIX))
 
         return json.loads(json_response.body[len(feconf.XSSI_PREFIX):])
 
-    def get_json(self, url):
+    def get_json(self, url, params=None, expected_status_int=200):
         """Get a JSON response, transformed to a Python object."""
-        json_response = self.testapp.get(url)
-        self.assertEqual(json_response.status_int, 200)
-        return self._parse_json_response(json_response, expect_errors=False)
+        if params is not None:
+            self.assertTrue(isinstance(params, dict))
 
-    def post_json(self, url, payload, csrf_token=None, expect_errors=False,
+        expect_errors = False
+        if expected_status_int >= 400:
+            expect_errors = True
+        json_response = self.testapp.get(
+            url, params, expect_errors=expect_errors,
+            status=expected_status_int)
+
+        # Testapp takes in a status parameter which is the expected status of
+        # the response. However this expected status is verified only when
+        # expect_errors=False. For other situations we need to explicitly check
+        # the status.
+        # Reference URL:
+        # https://github.com/Pylons/webtest/blob/
+        # bf77326420b628c9ea5431432c7e171f88c5d874/webtest/app.py#L1119 .
+        self.assertEqual(json_response.status_int, expected_status_int)
+        return self._parse_json_response(json_response, expect_errors)
+
+    def post_json(self, url, payload, csrf_token=None,
                   expected_status_int=200, upload_files=None):
         """Post an object to the server by JSON; return the received object."""
         data = {'payload': json.dumps(payload)}
         if csrf_token:
             data['csrf_token'] = csrf_token
 
-        json_response = self.testapp.post(
-            str(url), data, expect_errors=expect_errors,
+        expect_errors = False
+        if expected_status_int >= 400:
+            expect_errors = True
+        json_response = self._send_post_request(
+            self.testapp, url, data,
+            expect_errors=expect_errors,
+            expected_status_int=expected_status_int,
             upload_files=upload_files)
+        # Testapp takes in a status parameter which is the expected status of
+        # the response. However this expected status is verified only when
+        # expect_errors=False. For other situations we need to explicitly check
+        # the status.
+        # Reference URL:
+        # https://github.com/Pylons/webtest/blob/
+        # bf77326420b628c9ea5431432c7e171f88c5d874/webtest/app.py#L1119 .
 
         self.assertEqual(json_response.status_int, expected_status_int)
-        return self._parse_json_response(
-            json_response, expect_errors=expect_errors)
+        return self._parse_json_response(json_response, expect_errors)
 
-    def put_json(self, url, payload, csrf_token=None, expect_errors=False,
-                 expected_status_int=200):
+    def delete_json(self, url, params='', expected_status_int=200):
+        """Delete object on the server using a JSON call."""
+        if params:
+            self.assertTrue(isinstance(params, dict))
+
+        expect_errors = False
+        if expected_status_int >= 400:
+            expect_errors = True
+        json_response = self.testapp.delete(
+            url, params, expect_errors=expect_errors,
+            status=expected_status_int)
+
+        # Testapp takes in a status parameter which is the expected status of
+        # the response. However this expected status is verified only when
+        # expect_errors=False. For other situations we need to explicitly check
+        # the status.
+        # Reference URL:
+        # https://github.com/Pylons/webtest/blob/
+        # bf77326420b628c9ea5431432c7e171f88c5d874/webtest/app.py#L1119 .
+        self.assertEqual(json_response.status_int, expected_status_int)
+        return self._parse_json_response(json_response, expect_errors)
+
+    def _send_post_request(
+            self, app, url, data, expect_errors,
+            expected_status_int=200,
+            upload_files=None, headers=None):
+        """Sends a post request with the data provided to the url specified.
+
+        Args:
+            app: TestApp. The WSGI application which receives the
+                request and produces response.
+            url: str. The URL to send the POST request to.
+            data: *. To be put in the body of the request. If params is an
+                iterator, it will be urlencoded. If it is a string, it will
+                not be encoded, but placed in the body directly. Can be a
+                collections.OrderedDict with webtest.forms.Upload fields
+                included.
+            expect_errors: bool. Whether errors are expected.
+            expected_status_int: int. The expected status code.
+            upload_files: list(tuple). A list of (fieldname, filename,
+                file_content). You can also use just (fieldname, filename) and
+                the file contents will be read from disk.
+            headers: dict(str, *). Extra headers to send.
+
+        Returns:
+            webtest.TestResponse: The response of the POST request.
+        """
+        json_response = app.post(
+            str(url), data, expect_errors=expect_errors,
+            upload_files=upload_files, headers=headers,
+            status=expected_status_int)
+        return json_response
+
+    def post_email(
+            self, recipient_email, sender_email, subject, body, html_body=None,
+            expect_errors=False, expected_status_int=200):
+        """Post an email from the sender to the recipient.
+
+        Args:
+            recipient_email: str. The email of the recipient.
+            sender_email: str. The email of the sender.
+            subject: str. The subject of the email.
+            body: str. The body of the email.
+            html_body: str. The HTML body of the email.
+            expect_errors: bool. Whether errors are expected.
+            expected_status_int: int. The expected status code of
+                the JSON response.
+
+        Returns:
+            json. A JSON response generated by _send_post_request function.
+        """
+        email = mail.EmailMessage(
+            sender=sender_email, to=recipient_email, subject=subject,
+            body=body)
+        if html_body is not None:
+            email.html = html_body
+
+        mime_email = email.to_mime_message()
+        headers = {'content-type': mime_email.get_content_type()}
+        data = mime_email.as_string()
+        app = webtest.TestApp(main_mail.app)
+        incoming_email_url = '/_ah/mail/%s' % recipient_email
+
+        return self._send_post_request(
+            app, incoming_email_url, data, headers=headers,
+            expect_errors=expect_errors,
+            expected_status_int=expected_status_int)
+
+    def put_json(self, url, payload, csrf_token=None, expected_status_int=200):
         """Put an object to the server by JSON; return the received object."""
         data = {'payload': json.dumps(payload)}
         if csrf_token:
             data['csrf_token'] = csrf_token
 
+        expect_errors = False
+        if expected_status_int >= 400:
+            expect_errors = True
         json_response = self.testapp.put(
             str(url), data, expect_errors=expect_errors)
 
+        # Testapp takes in a status parameter which is the expected status of
+        # the response. However this expected status is verified only when
+        # expect_errors=False. For other situations we need to explicitly check
+        # the status.
+        # Reference URL:
+        # https://github.com/Pylons/webtest/blob/
+        # bf77326420b628c9ea5431432c7e171f88c5d874/webtest/app.py#L1119 .
         self.assertEqual(json_response.status_int, expected_status_int)
-        return self._parse_json_response(
-            json_response, expect_errors=expect_errors)
+        return self._parse_json_response(json_response, expect_errors)
 
     def get_csrf_token_from_response(self, response):
         """Retrieve the CSRF token from a GET response."""
         return re.search(CSRF_REGEX, response.body).group(1)
 
     def signup(self, email, username):
-        """Complete the signup process for the user with the given username."""
+        """Complete the signup process for the user with the given username.
+
+        Args:
+            email: str. Email of the given user.
+            username: str. Username of the given user.
+        """
         self.login(email)
+        # Signup uses a custom urlfetch mock (URLFetchServiceMock), instead
+        # of the stub provided by testbed. This custom mock is disabled
+        # immediately once the signup is complete. This is done to avoid
+        # external  calls being made to Gravatar when running the backend
+        # tests.
+        with self.urlfetch_mock():
+            response = self.get_html_response(feconf.SIGNUP_URL)
+            self.assertEqual(response.status_int, 200)
+            csrf_token = self.get_csrf_token_from_response(response)
+            response = self.testapp.post(
+                feconf.SIGNUP_DATA_URL, params={
+                    'csrf_token': csrf_token,
+                    'payload': json.dumps({
+                        'username': username,
+                        'agreed_to_terms': True
+                    })
+                })
+            self.assertEqual(response.status_int, 200)
+        self.logout()
 
-        response = self.testapp.get(feconf.SIGNUP_URL)
-        self.assertEqual(response.status_int, 200)
+    def set_config_property(self, config_obj, new_config_value):
+        """Sets a given configuration object's value to the new value specified
+        using a POST request.
+        """
+        self._stash_current_user_env()
+
+        self.login('tmpsuperadmin@example.com', is_super_admin=True)
+        response = self.get_html_response('/admin')
         csrf_token = self.get_csrf_token_from_response(response)
-        response = self.testapp.post(feconf.SIGNUP_DATA_URL, {
-            'csrf_token': csrf_token,
-            'payload': json.dumps({
+        self.post_json(
+            '/adminhandler', {
+                'action': 'save_config_properties',
+                'new_config_property_values': {
+                    config_obj.name: new_config_value,
+                }
+            }, csrf_token=csrf_token)
+        self.logout()
+
+        self._restore_stashed_user_env()
+
+    def set_user_role(self, username, user_role):
+        """Sets the given role for this user.
+
+        Args:
+            username: str. Username of the given user.
+            user_role: str. Role of the given user.
+        """
+        self._stash_current_user_env()
+
+        self.login('tmpsuperadmin@example.com', is_super_admin=True)
+        response = self.get_html_response('/admin')
+        csrf_token = self.get_csrf_token_from_response(response)
+        self.post_json(
+            '/adminrolehandler', {
                 'username': username,
-                'agreed_to_terms': True
-            })
-        })
-        self.assertEqual(response.status_int, 200)
-
-        self.logout()
-
-    def set_admins(self, admin_emails):
-        """Set the ADMIN_EMAILS property."""
-        self._stash_current_user_env()
-
-        self.login('tmpsuperadmin@example.com', is_super_admin=True)
-        response = self.testapp.get('/admin')
-        csrf_token = self.get_csrf_token_from_response(response)
-        self.post_json('/adminhandler', {
-            'action': 'save_config_properties',
-            'new_config_property_values': {
-                config_domain.ADMIN_EMAILS.name: admin_emails,
-            }
-        }, csrf_token)
+                'role': user_role
+            }, csrf_token=csrf_token)
         self.logout()
 
         self._restore_stashed_user_env()
 
-    def set_moderators(self, moderator_emails):
-        """Set the MODERATOR_EMAILS property."""
-        self._stash_current_user_env()
+    def set_admins(self, admin_usernames):
+        """Sets role of given users as ADMIN.
 
-        self.login('tmpsuperadmin@example.com', is_super_admin=True)
-        response = self.testapp.get('/admin')
-        csrf_token = self.get_csrf_token_from_response(response)
-        self.post_json('/adminhandler', {
-            'action': 'save_config_properties',
-            'new_config_property_values': {
-                config_domain.MODERATOR_EMAILS.name: moderator_emails,
-            }
-        }, csrf_token)
-        self.logout()
+        Args:
+            admin_usernames: list(str). List of usernames.
+        """
+        for name in admin_usernames:
+            self.set_user_role(name, feconf.ROLE_ID_ADMIN)
 
-        self._restore_stashed_user_env()
+    def set_topic_managers(self, topic_manager_usernames):
+        """Sets role of given users as TOPIC_MANAGER.
+
+        Args:
+            topic_manager_usernames: list(str). List of usernames.
+        """
+        for name in topic_manager_usernames:
+            self.set_user_role(name, feconf.ROLE_ID_TOPIC_MANAGER)
+
+    def set_moderators(self, moderator_usernames):
+        """Sets role of given users as MODERATOR.
+
+        Args:
+            moderator_usernames: list(str). List of usernames.
+        """
+        for name in moderator_usernames:
+            self.set_user_role(name, feconf.ROLE_ID_MODERATOR)
+
+    def set_banned_users(self, banned_usernames):
+        """Sets role of given users as BANNED_USER.
+
+        Args:
+            banned_usernames: list(str). List of usernames.
+        """
+        for name in banned_usernames:
+            self.set_user_role(name, feconf.ROLE_ID_BANNED_USER)
+
+    def set_collection_editors(self, collection_editor_usernames):
+        """Sets role of given users as COLLECTION_EDITOR.
+
+        Args:
+            collection_editor_usernames: list(str). List of usernames.
+        """
+        for name in collection_editor_usernames:
+            self.set_user_role(name, feconf.ROLE_ID_COLLECTION_EDITOR)
 
     def get_current_logged_in_user_id(self):
+        """Gets the user_id of the current logged-in user.
+
+        Returns:
+            str. The user_id of the currently logged-in user. In tests, we
+                simulate this using a USER_ID env variable.
+        """
         return os.environ['USER_ID']
 
     def get_user_id_from_email(self, email):
+        """Gets the user_id corresponding to the given email.
+
+        Args:
+            email: str. A valid email stored in the App Engine database.
+
+        Returns:
+            user_id: str. ID of the user possessing the given email.
+        """
         return current_user_services.get_user_id_from_email(email)
 
-    def save_new_default_exploration(self,
-            exploration_id, owner_id, title='A title'):
+    def save_new_default_exploration(
+            self, exploration_id, owner_id, title='A title'):
         """Saves a new default exploration written by owner_id.
 
-        Returns the exploration domain object.
+        Args:
+            exploration_id: str. The id of the new validated exploration.
+            owner_id: str. The user_id of the creator of the exploration.
+            title: str. The title of the exploration.
+
+        Returns:
+            Exploration. The exploration domain object.
         """
         exploration = exp_domain.Exploration.create_default_exploration(
-            exploration_id, title, 'A category')
+            exploration_id, title=title, category='A category')
         exp_services.save_new_exploration(owner_id, exploration)
         return exploration
 
     def save_new_valid_exploration(
             self, exploration_id, owner_id, title='A title',
             category='A category', objective='An objective',
-            end_state_name=None):
+            language_code=constants.DEFAULT_LANGUAGE_CODE,
+            end_state_name=None,
+            interaction_id='TextInput'):
         """Saves a new strictly-validated exploration.
 
-        Returns the exploration domain object.
+        Args:
+            exploration_id: str. The id of the new validated exploration.
+            owner_id: str. The user_id of the creator of the exploration.
+            title: str. The title of the exploration.
+            category: str. The category this exploration belongs to.
+            objective: str. The objective of this exploration.
+            language_code: str. The language_code of this exploration.
+            end_state_name: str. The name of the end state for the exploration.
+            interaction_id: str. The id of the interaction.
+
+        Returns:
+            Exploration. The exploration domain object.
         """
         exploration = exp_domain.Exploration.create_default_exploration(
-            exploration_id, title, category)
+            exploration_id, title=title, category=category,
+            language_code=language_code)
         exploration.states[exploration.init_state_name].update_interaction_id(
-            'TextInput')
+            interaction_id)
         exploration.objective = objective
 
-        # If an end state name is provided, add terminal node with that name
+        # If an end state name is provided, add terminal node with that name.
         if end_state_name is not None:
             exploration.add_states([end_state_name])
             end_state = exploration.states[end_state_name]
             end_state.update_interaction_id('EndExploration')
-            end_state.interaction.default_outcome = None
+            end_state.update_interaction_default_outcome(None)
 
-            # Link first state to ending state (to maintain validity)
+            # Link first state to ending state (to maintain validity).
             init_state = exploration.states[exploration.init_state_name]
             init_interaction = init_state.interaction
             init_interaction.default_outcome.dest = end_state_name
+
+        exp_services.save_new_exploration(owner_id, exploration)
+        return exploration
+
+    def save_new_linear_exp_with_state_names_and_interactions(
+            self, exploration_id, owner_id, state_names, interaction_ids,
+            title='A title', category='A category', objective='An objective',
+            language_code=constants.DEFAULT_LANGUAGE_CODE):
+        """Saves a new strictly-validated exploration with a sequence of states.
+
+        Args:
+            exploration_id: str. The id of the new validated exploration.
+            owner_id: str. The user_id of the creator of the exploration.
+            state_names: list(str). The names of states to be linked
+                sequentially in the exploration. Must be a non-empty list and
+                contain no duplicates.
+            interaction_ids: list(str). The names of the interaction ids to be
+                assigned to each state. Values will be cycled, so it doesn't
+                need to be the same size as state_names, but it must be
+                non-empty.
+            title: str. The title of the exploration.
+            category: str. The category this exploration belongs to.
+            objective: str. The objective of this exploration.
+            language_code: str. The language_code of this exploration.
+
+        Returns:
+            Exploration. The exploration domain object.
+        """
+        if not state_names:
+            raise ValueError('must provide at least one state name')
+        if not interaction_ids:
+            raise ValueError('must provide at least one interaction type')
+        interaction_ids = itertools.cycle(interaction_ids)
+
+        exploration = exp_domain.Exploration.create_default_exploration(
+            exploration_id, title=title, init_state_name=state_names[0],
+            category=category, objective=objective, language_code=language_code)
+
+        exploration.add_states(state_names[1:])
+        for from_state_name, dest_state_name in (
+                zip(state_names[:-1], state_names[1:])):
+            from_state = exploration.states[from_state_name]
+            from_state.update_interaction_id(next(interaction_ids))
+            from_state.interaction.default_outcome.dest = dest_state_name
+        end_state = exploration.states[state_names[-1]]
+        end_state.update_interaction_id('EndExploration')
+        end_state.update_interaction_default_outcome(None)
 
         exp_services.save_new_exploration(owner_id, exploration)
         return exploration
@@ -338,6 +1103,11 @@ class TestBase(unittest.TestCase):
         the usual functions for updating and creating explorations. This is
         because the latter approach would result in an exploration with the
         *current* states schema version.
+
+        Args:
+            exp_id: str. The exploration ID.
+            user_id: str. The user_id of the creator.
+            title: str. The title of the exploration.
         """
         exp_model = exp_models.ExplorationModel(
             id=exp_id,
@@ -348,8 +1118,6 @@ class TestBase(unittest.TestCase):
             tags=[],
             blurb='',
             author_notes='',
-            default_skin='conversation_v1',
-            skin_customizations={'panels_contents': {}},
             states_schema_version=0,
             init_state_name=feconf.DEFAULT_INIT_STATE_NAME,
             states=self.VERSION_0_STATES_DICT,
@@ -359,11 +1127,492 @@ class TestBase(unittest.TestCase):
         rights_manager.create_new_exploration_rights(exp_id, user_id)
 
         commit_message = 'New exploration created with title \'%s\'.' % title
-        exp_model.commit(user_id, commit_message, [{
-            'cmd': 'create_new',
-            'title': 'title',
-            'category': 'category',
-        }])
+        exp_model.commit(
+            user_id, commit_message, [{
+                'cmd': 'create_new',
+                'title': 'title',
+                'category': 'category',
+            }])
+        exp_rights = exp_models.ExplorationRightsModel.get_by_id(exp_id)
+        exp_summary_model = exp_models.ExpSummaryModel(
+            id=exp_id,
+            title=title,
+            category='category',
+            objective='Old objective',
+            language_code='en',
+            tags=[],
+            ratings=feconf.get_empty_ratings(),
+            scaled_average_rating=feconf.EMPTY_SCALED_AVERAGE_RATING,
+            status=exp_rights.status,
+            community_owned=exp_rights.community_owned,
+            owner_ids=exp_rights.owner_ids,
+            contributor_ids=[],
+            contributors_summary={},
+        )
+        exp_summary_model.put()
+
+        # Note: Also save state id mappping model for new exploration. If not
+        # saved, it may cause errors in test cases.
+        exploration = exp_services.get_exploration_from_model(exp_model)
+        exp_services.create_and_save_state_id_mapping_model(exploration, [])
+
+    def save_new_exp_with_states_schema_v21(self, exp_id, user_id, title):
+        """Saves a new default exploration with a default version 21 states
+        dictionary. Version 21 is where training data of exploration is stored
+        with the states dict.
+
+        This function should only be used for creating explorations in tests
+        involving migration of datastore explorations that use an old states
+        schema version.
+
+        Note that it makes an explicit commit to the datastore instead of using
+        the usual functions for updating and creating explorations. This is
+        because the latter approach would result in an exploration with the
+        *current* states schema version.
+
+        Args:
+            exp_id: str. The exploration ID.
+            user_id: str. The user_id of the creator.
+            title: str. The title of the exploration.
+        """
+        exp_model = exp_models.ExplorationModel(
+            id=exp_id,
+            category='category',
+            title=title,
+            objective='Old objective',
+            language_code='en',
+            tags=[],
+            blurb='',
+            author_notes='',
+            states_schema_version=21,
+            init_state_name=feconf.DEFAULT_INIT_STATE_NAME,
+            states=self.VERSION_21_STATE_DICT,
+            param_specs={},
+            param_changes=[]
+        )
+        rights_manager.create_new_exploration_rights(exp_id, user_id)
+
+        commit_message = 'New exploration created with title \'%s\'.' % title
+        exp_model.commit(
+            user_id, commit_message, [{
+                'cmd': 'create_new',
+                'title': 'title',
+                'category': 'category',
+            }])
+        exp_rights = exp_models.ExplorationRightsModel.get_by_id(exp_id)
+        exp_summary_model = exp_models.ExpSummaryModel(
+            id=exp_id,
+            title=title,
+            category='category',
+            objective='Old objective',
+            language_code='en',
+            tags=[],
+            ratings=feconf.get_empty_ratings(),
+            scaled_average_rating=feconf.EMPTY_SCALED_AVERAGE_RATING,
+            status=exp_rights.status,
+            community_owned=exp_rights.community_owned,
+            owner_ids=exp_rights.owner_ids,
+            contributor_ids=[],
+            contributors_summary={},
+        )
+        exp_summary_model.put()
+
+        # Note: Also save state id mappping model for new exploration. If not
+        # saved, it may cause errors in test cases.
+        exploration = exp_services.get_exploration_from_model(exp_model)
+        exp_services.create_and_save_state_id_mapping_model(exploration, [])
+
+    def publish_exploration(self, owner_id, exploration_id):
+        """Publish the exploration with the given exploration_id.
+
+        Args:
+            owner_id: str. The user_id of the owner of the exploration.
+            exploration_id: str. The ID of the new exploration.
+        """
+        committer = user_services.UserActionsInfo(owner_id)
+        rights_manager.publish_exploration(committer, exploration_id)
+
+    def save_new_default_collection(
+            self, collection_id, owner_id, title='A title',
+            category='A category', objective='An objective',
+            language_code=constants.DEFAULT_LANGUAGE_CODE):
+        """Saves a new default collection written by owner_id.
+
+        Args:
+            collection_id: str. The id of the new default collection.
+            owner_id: str. The user_id of the creator of the collection.
+            title: str. The title of the collection.
+            category: str. The category this collection belongs to.
+            objective: str. The objective of this collection.
+            language_code: str. The language_code of this collection.
+
+        Returns:
+            Collection. The collection domain object.
+        """
+        collection = collection_domain.Collection.create_default_collection(
+            collection_id, title=title, category=category, objective=objective,
+            language_code=language_code)
+        collection_services.save_new_collection(owner_id, collection)
+        return collection
+
+    def save_new_valid_collection(
+            self, collection_id, owner_id, title='A title',
+            category='A category', objective='An objective',
+            language_code=constants.DEFAULT_LANGUAGE_CODE,
+            exploration_id='an_exploration_id',
+            end_state_name=DEFAULT_END_STATE_NAME):
+        """Creates an Oppia collection and adds a node saving the
+        exploration details.
+
+        Args:
+            collection_id: str. ID for the collection to be created.
+            owner_id: str. The user_id of the creator of the collection.
+            title: str. Title for the collection.
+            category: str. The category of the exploration.
+            objective: str. Objective for the exploration.
+            language_code: str. The language code for the exploration.
+            exploration_id: str. The exploration_id for the Oppia exploration.
+            end_state_name: str. The name of the end state for the exploration.
+
+        Returns:
+            Collection. A newly-created collection containing the corresponding
+                exploration details.
+        """
+        collection = collection_domain.Collection.create_default_collection(
+            collection_id,
+            title=title,
+            category=category,
+            objective=objective,
+            language_code=language_code)
+
+        # Check whether exploration with given exploration_id exists or not.
+        exploration = exp_services.get_exploration_by_id(
+            exploration_id, strict=False)
+        if exploration is None:
+            exploration = self.save_new_valid_exploration(
+                exploration_id, owner_id,
+                title=title,
+                category=category,
+                objective=objective,
+                end_state_name=end_state_name)
+        collection.add_node(exploration.id)
+
+        collection_services.save_new_collection(owner_id, collection)
+        return collection
+
+    def publish_collection(self, owner_id, collection_id):
+        """Publish the collection with the given collection_id.
+
+        Args:
+            owner_id: str. The user_id of the owner of the collection.
+            collection_id: str. ID of the collection to be published.
+        """
+        committer = user_services.UserActionsInfo(owner_id)
+        rights_manager.publish_collection(committer, collection_id)
+
+    def save_new_story(
+            self, story_id, owner_id, title,
+            description, notes,
+            language_code=constants.DEFAULT_LANGUAGE_CODE):
+        """Creates an Oppia Story and saves it.
+
+        Args:
+            story_id: str. ID for the story to be created.
+            owner_id: str. The user_id of the creator of the story.
+            title: str. The title of the story.
+            description: str. The high level description of the story.
+            notes: str. A set of notes, that describe the characters,
+                main storyline, and setting.
+            language_code: str. The ISO 639-1 code for the language this
+                story is written in.
+
+        Returns:
+            Story. A newly-created story.
+        """
+        story = story_domain.Story.create_default_story(story_id, title)
+        story.title = title
+        story.description = description
+        story.notes = notes
+        story.language_code = language_code
+        story_services.save_new_story(owner_id, story)
+        return story
+
+    def save_new_story_with_story_contents_schema_v1(
+            self, story_id, owner_id, title, description, notes,
+            language_code=constants.DEFAULT_LANGUAGE_CODE):
+        """Saves a new skill with a default version 1 story contents
+        data dictionary.
+
+        This function should only be used for creating stories in tests
+        involving migration of datastore stories that use an old story
+        contents schema version.
+
+        Note that it makes an explicit commit to the datastore instead of using
+        the usual functions for updating and creating stories. This is
+        because the latter approach would result in a story with the
+        *current* story contents schema version.
+
+        Args:
+            story_id: str. ID for the story to be created.
+            owner_id: str. The user_id of the creator of the story.
+            title: str. The title of the story.
+            description: str. The high level description of the story.
+            notes: str. A set of notes, that describe the characters,
+                main storyline, and setting.
+            language_code: str. The ISO 639-1 code for the language this
+                story is written in.
+        """
+        story_model = story_models.StoryModel(
+            id=story_id,
+            description=description,
+            title=title,
+            language_code=language_code,
+            story_contents_schema_version=1,
+            notes=notes,
+            story_contents=self.VERSION_1_STORY_CONTENTS_DICT
+        )
+        commit_message = (
+            'New story created with title \'%s\'.' % title)
+        story_model.commit(
+            owner_id, commit_message, [{
+                'cmd': story_domain.CMD_CREATE_NEW,
+                'title': title
+            }])
+
+    def save_new_topic(
+            self, topic_id, owner_id, name, description,
+            canonical_story_ids, additional_story_ids, uncategorized_skill_ids,
+            subtopics, next_subtopic_id,
+            language_code=constants.DEFAULT_LANGUAGE_CODE):
+        """Creates an Oppia Topic and saves it.
+
+        Args:
+            topic_id: str. ID for the topic to be created.
+            owner_id: str. The user_id of the creator of the topic.
+            name: str. The name of the topic.
+            description: str. The desscription of the topic.
+            canonical_story_ids: list(str). The list of ids of canonical stories
+                that are part of the topic.
+            additional_story_ids: list(str). The list of ids of additional
+                stories that are part of the topic.
+            uncategorized_skill_ids: list(str). The list of ids of skills that
+                are not part of any subtopic.
+            subtopics: list(Subtopic). The different subtopics that are part of
+                this topic.
+            next_subtopic_id: int. The id for the next subtopic.
+            language_code: str. The ISO 639-1 code for the language this
+                topic is written in.
+
+        Returns:
+            Topic. A newly-created topic.
+        """
+        topic = topic_domain.Topic(
+            topic_id, name, description, canonical_story_ids,
+            additional_story_ids, uncategorized_skill_ids, subtopics,
+            feconf.CURRENT_SUBTOPIC_SCHEMA_VERSION, next_subtopic_id,
+            language_code, 0
+        )
+        topic_services.save_new_topic(owner_id, topic)
+        return topic
+
+    def save_new_topic_with_subtopic_schema_v1(
+            self, topic_id, owner_id, name, canonical_name, description,
+            canonical_story_ids, additional_story_ids, uncategorized_skill_ids,
+            next_subtopic_id, language_code=constants.DEFAULT_LANGUAGE_CODE):
+        """Saves a new topic with a default version 1 subtopic
+        data dictionary.
+
+        This function should only be used for creating topics in tests
+        involving migration of datastore topics that use an old subtopic
+        schema version.
+
+        Note that it makes an explicit commit to the datastore instead of using
+        the usual functions for updating and creating topics. This is
+        because the latter approach would result in a topic with the
+        *current* subtopic schema version.
+
+        Args:
+            topic_id: str. ID for the topic to be created.
+            owner_id: str. The user_id of the creator of the topic.
+            name: str. The name of the topic.
+            canonical_name: str. The canonical name (lowercase) of the topic.
+            description: str. The desscription of the topic.
+            canonical_story_ids: list(str). The list of ids of canonical stories
+                that are part of the topic.
+            additional_story_ids: list(str). The list of ids of additional
+                stories that are part of the topic.
+            uncategorized_skill_ids: list(str). The list of ids of skills that
+                are not part of any subtopic.
+            next_subtopic_id: int. The id for the next subtopic.
+            language_code: str. The ISO 639-1 code for the language this
+                topic is written in.
+        """
+        topic_rights_model = topic_models.TopicRightsModel(
+            id=topic_id,
+            manager_ids=[],
+            topic_is_published=True
+        )
+        topic_model = topic_models.TopicModel(
+            id=topic_id,
+            name=name,
+            canonical_name=canonical_name,
+            description=description,
+            language_code=language_code,
+            canonical_story_ids=canonical_story_ids,
+            additional_story_ids=additional_story_ids,
+            uncategorized_skill_ids=uncategorized_skill_ids,
+            subtopic_schema_version=1,
+            next_subtopic_id=next_subtopic_id,
+            subtopics=[self.VERSION_1_SUBTOPIC_DICT]
+        )
+        commit_message = (
+            'New topic created with name \'%s\'.' % name)
+        topic_rights_model.commit(
+            committer_id=owner_id,
+            commit_message='Created new topic rights',
+            commit_cmds=[{'cmd': topic_domain.CMD_CREATE_NEW}]
+        )
+        topic_model.commit(
+            owner_id, commit_message, [{
+                'cmd': topic_domain.CMD_CREATE_NEW,
+                'name': name
+            }])
+
+    def save_new_question(
+            self, question_id, owner_id, question_state_data,
+            language_code=constants.DEFAULT_LANGUAGE_CODE):
+        """Creates an Oppia Question and saves it.
+
+        Args:
+            question_id: str. ID for the question to be created.
+            owner_id: str. The id of the user creating the question.
+            question_state_data: State. The state data for the question.
+            language_code: str. The ISO 639-1 code for the language this
+                question is written in.
+
+        Returns:
+            Question. A newly-created question.
+        """
+        question = question_domain.Question(
+            question_id, question_state_data,
+            feconf.CURRENT_STATE_SCHEMA_VERSION, language_code, 0)
+        question_services.add_question(owner_id, question)
+        return question
+
+    def save_new_question_with_state_data_schema_v27(
+            self, question_id, owner_id,
+            language_code=constants.DEFAULT_LANGUAGE_CODE):
+        """Saves a new default question with a default version 27 state
+        data dictionary.
+
+        This function should only be used for creating questions in tests
+        involving migration of datastore questions that use an old state
+        data schema version.
+
+        Note that it makes an explicit commit to the datastore instead of using
+        the usual functions for updating and creating questions. This is
+        because the latter approach would result in an question with the
+        *current* state data schema version.
+
+        Args:
+            question_id: str. ID for the question to be created.
+            owner_id: str. The id of the user creating the question.
+            language_code: str. The ISO 639-1 code for the language this
+                question is written in.
+        """
+        question_services.create_new_question_rights(question_id, owner_id)
+        question_model = question_models.QuestionModel(
+            id=question_id,
+            question_state_data=self.VERSION_27_STATE_DICT,
+            language_code=language_code,
+            version=1,
+            question_state_data_schema_version=27
+        )
+        question_model.commit(
+            owner_id, 'New question created',
+            [{'cmd': question_domain.CMD_CREATE_NEW}])
+
+    def save_new_skill(
+            self, skill_id, owner_id,
+            description, misconceptions=None, skill_contents=None,
+            language_code=constants.DEFAULT_LANGUAGE_CODE):
+        """Creates an Oppia Skill and saves it.
+
+        Args:
+            skill_id: str. ID for the skill to be created.
+            owner_id: str. The user_id of the creator of the skill.
+            description: str. The description of the skill.
+            misconceptions: list(Misconception). A list of Misconception objects
+                that contains the various misconceptions of the skill.
+            skill_contents: SkillContents. A SkillContents object containing the
+                explanation and examples of the skill.
+            language_code: str. The ISO 639-1 code for the language this
+                skill is written in.
+
+        Returns:
+            Skill. A newly-created skill.
+        """
+        skill = skill_domain.Skill.create_default_skill(skill_id, description)
+        if misconceptions is not None:
+            skill.misconceptions = misconceptions
+            skill.next_misconception_id = len(misconceptions) + 1
+        if skill_contents is not None:
+            skill.skill_contents = skill_contents
+        skill.language_code = language_code
+        skill.version = 0
+        skill_services.save_new_skill(owner_id, skill)
+        return skill
+
+    def save_new_skill_with_defined_schema_versions(
+            self, skill_id, owner_id, description, next_misconception_id,
+            misconceptions=None, skill_contents=None,
+            misconceptions_schema_version=1, skill_contents_schema_version=1,
+            language_code=constants.DEFAULT_LANGUAGE_CODE):
+        """Saves a new default skill with the given versions for misconceptions
+        and skill contents.
+
+        This function should only be used for creating skills in tests
+        involving migration of datastore skills that use an old
+        schema version.
+
+        Note that it makes an explicit commit to the datastore instead of using
+        the usual functions for updating and creating skills. This is
+        because the latter approach would result in a skill with the
+        *current* schema version.
+
+        Args:
+            skill_id: str. ID for the skill to be created.
+            owner_id: str. The user_id of the creator of the skill.
+            description: str. The description of the skill.
+            next_misconception_id: int. The misconception id to be used by
+                the next misconception added.
+            misconceptions: list(Misconception.to_dict()). The list
+                of misconception dicts associated with the skill.
+            skill_contents: SkillContents.to_dict(). A SkillContents dict
+                containing the explanation and examples of the skill.
+            misconceptions_schema_version: int. The schema version for the
+                misconceptions object.
+            skill_contents_schema_version: int. The schema version for the
+                skill_contents object.
+            language_code: str. The ISO 639-1 code for the language this
+                skill is written in.
+        """
+        skill_services.create_new_skill_rights(skill_id, owner_id)
+        skill_model = skill_models.SkillModel(
+            id=skill_id,
+            description=description,
+            language_code=language_code,
+            misconceptions=misconceptions,
+            skill_contents=skill_contents,
+            next_misconception_id=next_misconception_id,
+            misconceptions_schema_version=misconceptions_schema_version,
+            skill_contents_schema_version=skill_contents_schema_version,
+            superseding_skill_id=None,
+            all_questions_merged=False
+        )
+        skill_model.commit(
+            owner_id, 'New skill created.',
+            [{'cmd': skill_domain.CMD_CREATE_NEW}])
 
     def get_updated_param_dict(
             self, param_dict, param_changes, exp_param_specs):
@@ -383,57 +1632,22 @@ class TestBase(unittest.TestCase):
                 obj_type, new_param_dict)
         return new_param_dict
 
-    def submit_answer(
-            self, exploration_id, state_name, answer,
-            params=None, exploration_version=None):
-        """Submits an answer as an exploration player and returns the
-        corresponding dict. This function has strong parallels to code in
-        PlayerServices.js which has the non-test code to perform the same
-        functionality. This is replicated here so backend tests may utilize the
-        functionality of PlayerServices.js without being able to access it.
-
-        TODO(bhenning): Replicate this in an integration test to protect
-        against code skew here.
+    def get_static_asset_filepath(self):
+        """Returns filepath for referencing static files on disk.
+        examples: '' or 'build/'.
         """
-        if params is None:
-            params = {}
+        filepath = ''
+        if not constants.DEV_MODE:
+            filepath = os.path.join('build')
 
-        exploration = exp_services.get_exploration_by_id(exploration_id)
+        return filepath
 
-        # First, the answer must be classified.
-        classify_result = self.post_json(
-            '/explorehandler/classify/%s' % exploration_id, {
-                'old_state': exploration.states[state_name].to_dict(),
-                'params': params,
-                'answer': answer
-            }
-        )
-
-        # Next, ensure the submission is recorded.
-        self.post_json(
-            '/explorehandler/answer_submitted_event/%s' % exploration_id, {
-                'answer': answer,
-                'params': params,
-                'version': exploration.version,
-                'old_state_name': state_name,
-                'rule_spec_string': classify_result['rule_spec_string']
-            }
-        )
-
-        # Now the next state's data must be calculated.
-        outcome = classify_result['outcome']
-        new_state = exploration.states[outcome['dest']]
-        params['answer'] = answer
-        new_params = self.get_updated_param_dict(
-            params, new_state.param_changes, exploration.param_specs)
-
-        return {
-            'feedback_html': jinja_utils.parse_string(
-                utils.get_random_choice(outcome['feedback'])
-                if outcome['feedback'] else '', params),
-            'question_html': new_state.content[0].to_html(new_params),
-            'state_name': outcome['dest']
-        }
+    def get_static_asset_url(self, asset_suffix):
+        """Returns the relative path for the asset, appending it to the
+        corresponding cache slug. asset_suffix should have a leading
+        slash.
+        """
+        return '/assets%s%s' % (utils.get_asset_dir_prefix(), asset_suffix)
 
     @contextlib.contextmanager
     def swap(self, obj, attr, newvalue):
@@ -443,10 +1657,18 @@ class TestBase(unittest.TestCase):
 
         Example usage:
 
-        import math
-        with self.swap(math, "sqrt", lambda x: 42):
-            print math.sqrt(16.0) # prints 42
-        print math.sqrt(16.0) # prints 4 as expected.
+            import math
+            with self.swap(math, 'sqrt', lambda x: 42):
+                print math.sqrt(16.0)  # prints 42
+            print math.sqrt(16.0)  # prints 4 as expected.
+
+        Note that this does not work directly for classmethods. In this case,
+        you will need to import the 'types' module, as follows:
+
+            import types
+            with self.swap(
+                SomePythonClass, 'some_classmethod',
+                types.MethodType(new_classmethod, SomePythonClass)):
 
         NOTE: self.swap and other context managers that are created using
         contextlib.contextmanager use generators that yield exactly once. This
@@ -466,6 +1688,7 @@ class AppEngineTestBase(TestBase):
     """Base class for tests requiring App Engine services."""
 
     def _delete_all_models(self):
+        """Deletes all models from the NDB datastore."""
         from google.appengine.ext import ndb
         ndb.delete_multi(ndb.Query().iter(keys_only=True))
 
@@ -512,17 +1735,64 @@ class AppEngineTestBase(TestBase):
         self.testbed.deactivate()
 
     def _get_all_queue_names(self):
+        """Returns all the queue names.
+
+        Returns:
+            list(str). All the queue names.
+        """
         return [q['name'] for q in self.taskqueue_stub.GetQueues()]
 
-    def count_jobs_in_taskqueue(self, queue_name=None):
-        """Counts the jobs in the given queue. If queue_name is None,
-        defaults to counting the jobs in all queues available.
+    @contextlib.contextmanager
+    def urlfetch_mock(
+            self, content='', status_code=200, headers=None):
+        """Enables the custom urlfetch mock (URLFetchServiceMock) within the
+        context of a 'with' statement.
+
+        This mock is currently used for signup to prevent external HTTP
+        requests to fetch the Gravatar profile picture for new users while the
+        backend tests are being run.
+
+        Args:
+            content: str. Response content or body.
+            status_code: int. Response status code.
+            headers: dict. The headers in subsequent calls to the
+                urlfetch mock. The keys of this dict are strings that represent
+                the header name and the value represents corresponding value of
+                that header.
+
+        Yields:
+            None.
         """
-        if queue_name:
-            return len(self.taskqueue_stub.get_filtered_tasks(
-                queue_names=[queue_name]))
+        if headers is None:
+            response_headers = {}
         else:
-            return len(self.taskqueue_stub.get_filtered_tasks())
+            response_headers = headers
+        self.testbed.init_urlfetch_stub(enable=False)
+        urlfetch_mock = URLFetchServiceMock()
+        apiproxy_stub_map.apiproxy.RegisterStub('urlfetch', urlfetch_mock)
+        urlfetch_mock.set_return_values(
+            content=content, status_code=status_code, headers=response_headers)
+        try:
+            yield
+        finally:
+            # Disables the custom mock.
+            self.testbed.init_urlfetch_stub(enable=False)
+            # Enables the testbed urlfetch mock.
+            self.testbed.init_urlfetch_stub()
+
+    def count_jobs_in_taskqueue(self, queue_name):
+        """Counts the jobs in the given queue."""
+        return len(self.get_pending_tasks(queue_name=queue_name))
+
+    def get_pending_tasks(self, queue_name=None):
+        """Returns the jobs in the given queue. If queue_name is None, defaults
+        to returning the jobs in all available queues.
+        """
+        if queue_name is not None:
+            return self.taskqueue_stub.get_filtered_tasks(
+                queue_names=[queue_name])
+        else:
+            return self.taskqueue_stub.get_filtered_tasks()
 
     def process_and_flush_pending_tasks(self, queue_name=None):
         """Runs and flushes pending tasks. If queue_name is None, does so for
@@ -537,8 +1807,8 @@ class AppEngineTestBase(TestBase):
             [queue_name] if queue_name else self._get_all_queue_names())
 
         tasks = self.taskqueue_stub.get_filtered_tasks(queue_names=queue_names)
-        for q in queue_names:
-            self.taskqueue_stub.FlushQueue(q)
+        for queue in queue_names:
+            self.taskqueue_stub.FlushQueue(queue)
 
         while tasks:
             for task in tasks:
@@ -546,12 +1816,18 @@ class AppEngineTestBase(TestBase):
                     from google.appengine.ext import deferred
                     deferred.run(task.payload)
                 else:
-                    # All other tasks are expected to be mapreduce ones.
+                    # All other tasks are expected to be mapreduce ones, or
+                    # Oppia-taskqueue-related ones.
                     headers = {
                         key: str(val) for key, val in task.headers.iteritems()
                     }
                     headers['Content-Length'] = str(len(task.payload or ''))
-                    response = self.testapp.post(
+
+                    app = (
+                        webtest.TestApp(main_taskqueue.app)
+                        if task.url.startswith('/task')
+                        else self.testapp)
+                    response = app.post(
                         url=str(task.url), params=(task.payload or ''),
                         headers=headers)
                     if response.status_code != 200:
@@ -560,41 +1836,80 @@ class AppEngineTestBase(TestBase):
 
             tasks = self.taskqueue_stub.get_filtered_tasks(
                 queue_names=queue_names)
-            for q in queue_names:
-                self.taskqueue_stub.FlushQueue(q)
+            for queue in queue_names:
+                self.taskqueue_stub.FlushQueue(queue)
+
+    def _create_valid_question_data(self, default_dest_state_name):
+        """Creates a valid question_data dict.
+
+        Args:
+            default_dest_state_name: str. The default destination state.
+
+        Returns:
+            dict. The default question_data dict.
+        """
+        state = state_domain.State.create_default_state(
+            default_dest_state_name, is_initial_state=True)
+        state.interaction.id = 'TextInput'
+        solution_dict = {
+            'answer_is_exclusive': False,
+            'correct_answer': 'Solution',
+            'explanation': {
+                'content_id': 'solution',
+                'html': 'This is a solution.'
+            }
+        }
+        hints_list = [{
+            'hint_content': {
+                'content_id': 'hint_1',
+                'html': '<p>This is a hint.</p>'
+            }
+        }]
+        state.update_interaction_solution(solution_dict)
+        state.update_interaction_hints(hints_list)
+        state.interaction.customization_args = {
+            'placeholder': 'Enter text here',
+            'rows': 1
+        }
+        state.interaction.default_outcome.labelled_as_correct = True
+        state.interaction.default_outcome.dest = None
+        return state
 
 
-if feconf.PLATFORM == 'gae':
-    GenericTestBase = AppEngineTestBase
-else:
-    raise Exception('Invalid platform: expected one of [\'gae\']')
+GenericTestBase = AppEngineTestBase
 
 
 class FunctionWrapper(object):
     """A utility for making function wrappers. Create a subclass and override
-       any or both of the pre_call_hook and post_call_hook methods. See these
-       methods for more info."""
+    any or both of the pre_call_hook and post_call_hook methods. See these
+    methods for more info.
+    """
 
-    def __init__(self, f):
+    def __init__(self, func):
         """Creates a new FunctionWrapper instance.
 
-        args:
-          - f: a callable, or data descriptor. If it's a descriptor, its
-            __get__ should return a bound method. For example, f can be a
-            function, a method, a static or class method, but not a @property.
+        Args:
+            func: a callable, or data descriptor. If it's a descriptor, its
+                __get__ should return a bound method. For example, func can be
+                a function, a method, a static or class method, but not a
+                @property.
         """
-        self._f = f
+        self._func = func
         self._instance = None
 
     def __call__(self, *args, **kwargs):
+        """Overrides the call method for the function to call pre_call_hook
+        method which would be called before the function is executed and
+        post_call_hook which would be called after the function is executed.
+        """
         if self._instance is not None:
             args = [self._instance] + list(args)
 
-        args_dict = inspect.getcallargs(self._f, *args, **kwargs)
+        args_dict = inspect.getcallargs(self._func, *args, **kwargs)
 
         self.pre_call_hook(args_dict)
 
-        result = self._f(*args, **kwargs)
+        result = self._func(*args, **kwargs)
 
         self.post_call_hook(args_dict, result)
 
@@ -602,34 +1917,62 @@ class FunctionWrapper(object):
 
     def __get__(self, instance, owner):
         # We have to implement __get__ because otherwise, we don't have a
-        # chance to bind to the instance self._f was bound to. See the
+        # chance to bind to the instance self._func was bound to. See the
         # following SO answer: https://stackoverflow.com/a/22555978/675311
         self._instance = instance
         return self
 
     def pre_call_hook(self, args):
+        """Override this to do tasks that should be executed before the
+        actual function call.
+
+        Args:
+            args: list(*). Set of arguments that the function accepts.
+        """
         pass
 
     def post_call_hook(self, args, result):
+        """Override this to do tasks that should be executed after the
+        actual function call.
+
+        Args:
+            args: list(*). Set of arguments that the function accepts.
+            result: *. Result returned from the function.
+        """
         pass
 
 
 class CallCounter(FunctionWrapper):
     """A function wrapper that keeps track of how often the function is called.
-       Note that the counter is incremented before each call, so it is also
-       increased when the function raises an exception."""
+    Note that the counter is incremented before each call, so it is also
+    increased when the function raises an exception.
+    """
 
     def __init__(self, f):
         """Counts the number of times the given function has been called.
-           See FunctionWrapper for arguments."""
+        See FunctionWrapper for arguments.
+        """
         super(CallCounter, self).__init__(f)
         self._times_called = 0
 
     @property
     def times_called(self):
+        """Property that returns the number of times the wrapped function has
+        been called.
+
+        Returns:
+            int. The number of times the wrapped function has been called.
+        """
         return self._times_called
 
     def pre_call_hook(self, args):
+        """Method that is called before each function call to increment the
+        counter tracking the number of times a function is called. This
+        will also be called even when the function raises an exception.
+
+        Args:
+            args: list(*). Set of arguments that the function accepts.
+        """
         self._times_called += 1
 
 
@@ -643,12 +1986,13 @@ class FailingFunction(FunctionWrapper):
     def __init__(self, f, exception, num_tries_before_success):
         """Create a new Failing function.
 
-        args:
-          - f: see FunctionWrapper.
-          - exception: the exception to be raised.
-          - num_tries_before_success: the number of times to raise an
-            exception, before a call succeeds. If this is 0, all calls will
-            succeed, if it is FailingFunction.INFINITY, all calls will fail.
+        Args:
+            f: func. See FunctionWrapper.
+            exception: Exception. The exception to be raised.
+            num_tries_before_success: int. The number of times to raise an
+                exception, before a call succeeds. If this is 0, all calls will
+                succeed, if it is FailingFunction. INFINITY, all calls will
+                fail.
         """
         super(FailingFunction, self).__init__(f)
         self._exception = exception
@@ -659,11 +2003,18 @@ class FailingFunction(FunctionWrapper):
 
         if not (self._num_tries_before_success >= 0 or self._always_fail):
             raise ValueError(
-                             'num_tries_before_success should either be an'
-                             'integer greater than or equal to 0,'
-                             'or FailingFunction.INFINITY')
+                'num_tries_before_success should either be an'
+                'integer greater than or equal to 0,'
+                'or FailingFunction.INFINITY')
 
     def pre_call_hook(self, args):
+        """Method that is called each time before the actual function call
+        to check if the exception is to be raised based on the number of
+        tries before success.
+
+        Args:
+            args: list(*). Set of arguments this function accepts.
+        """
         self._times_called += 1
         call_should_fail = (
             self._num_tries_before_success >= self._times_called)

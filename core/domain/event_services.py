@@ -16,17 +16,20 @@
 
 """Classes for handling events."""
 
-__author__ = 'Sean Lip'
-
 import inspect
 
 from core import jobs_registry
 from core.domain import exp_domain
+from core.domain import exp_services
+from core.domain import stats_domain
+from core.domain import stats_services
 from core.platform import models
-(stats_models,feedback_models) = models.Registry.import_models([
+from core.platform.taskqueue import gae_taskqueue_services as taskqueue_services
+import feconf
+
+(stats_models, feedback_models) = models.Registry.import_models([
     models.NAMES.statistics, models.NAMES.feedback])
 taskqueue_services = models.Registry.import_taskqueue_services()
-import feconf
 
 
 class BaseEventHandler(object):
@@ -41,9 +44,10 @@ class BaseEventHandler(object):
         """Dispatch events asynchronously to continuous computation realtime
         layers that are listening for them.
         """
-        taskqueue_services.defer_to_events_queue(
+        taskqueue_services.defer(
             jobs_registry.ContinuousComputationEventDispatcher.dispatch_event,
-            cls.EVENT_TYPE, *args, **kwargs)
+            taskqueue_services.QUEUE_NAME_EVENTS, cls.EVENT_TYPE, *args,
+            **kwargs)
 
     @classmethod
     def _handle_event(cls, *args, **kwargs):
@@ -63,6 +67,30 @@ class BaseEventHandler(object):
         cls._handle_event(*args, **kwargs)
 
 
+class StatsEventsHandler(BaseEventHandler):
+    """Event handler for incremental update of analytics model using aggregated
+    stats data.
+    """
+
+    EVENT_TYPE = feconf.EVENT_TYPE_ALL_STATS
+
+    @classmethod
+    def _is_latest_version(cls, exp_id, exp_version):
+        """Verifies whether the exploration version for the stats to be stored
+        corresponds to the latest version of the exploration.
+        """
+        exploration = exp_services.get_exploration_by_id(exp_id)
+        return exploration.version == exp_version
+
+    @classmethod
+    def _handle_event(cls, exploration_id, exp_version, aggregated_stats):
+        if cls._is_latest_version(exploration_id, exp_version):
+            taskqueue_services.defer(
+                stats_services.update_stats,
+                taskqueue_services.QUEUE_NAME_STATS, exploration_id,
+                exp_version, aggregated_stats)
+
+
 class AnswerSubmissionEventHandler(BaseEventHandler):
     """Event handler for recording answer submissions."""
 
@@ -75,28 +103,56 @@ class AnswerSubmissionEventHandler(BaseEventHandler):
         pass
 
     @classmethod
-    def _handle_event(cls, exploration_id, exploration_version, state_name,
-                      rule_spec_string, answer):
-        """Records an event when an answer triggers a rule."""
+    def _handle_event(
+            cls, exploration_id, exploration_version, state_name,
+            interaction_id, answer_group_index, rule_spec_index,
+            classification_categorization, session_id, time_spent_in_secs,
+            params, normalized_answer):
+        """Records an event when an answer triggers a rule. The answer recorded
+        here is a Python-representation of the actual answer submitted by the
+        user.
+        """
         # TODO(sll): Escape these args?
-        stats_models.process_submitted_answer(
-            exploration_id, exploration_version, state_name,
-            rule_spec_string, answer)
+        stats_services.record_answer(
+            exploration_id, exploration_version, state_name, interaction_id,
+            stats_domain.SubmittedAnswer(
+                normalized_answer, interaction_id, answer_group_index,
+                rule_spec_index, classification_categorization, params,
+                session_id, time_spent_in_secs))
+
+        feedback_is_useful = (
+            classification_categorization != (
+                exp_domain.DEFAULT_OUTCOME_CLASSIFICATION))
+
+        stats_models.AnswerSubmittedEventLogEntryModel.create(
+            exploration_id, exploration_version, state_name, session_id,
+            time_spent_in_secs, feedback_is_useful)
 
 
-class DefaultRuleAnswerResolutionEventHandler(BaseEventHandler):
-    """Event handler for recording resolving of answers triggering the default
-    rule."""
+class ExplorationActualStartEventHandler(BaseEventHandler):
+    """Event handler for recording exploration actual start events."""
 
-    EVENT_TYPE = feconf.EVENT_TYPE_DEFAULT_ANSWER_RESOLVED
+    EVENT_TYPE = feconf.EVENT_TYPE_ACTUAL_START_EXPLORATION
 
     @classmethod
-    def _handle_event(cls, exploration_id, state_name, answers):
-        """Resolves a list of answers for the default rule of this state."""
-        # TODO(sll): Escape these args?
-        stats_models.resolve_answers(
-            exploration_id, state_name,
-            exp_domain.DEFAULT_RULESPEC_STR, answers)
+    def _handle_event(
+            cls, exp_id, exp_version, state_name, session_id):
+        stats_models.ExplorationActualStartEventLogEntryModel.create(
+            exp_id, exp_version, state_name, session_id)
+
+
+class SolutionHitEventHandler(BaseEventHandler):
+    """Event handler for recording solution hit events."""
+
+    EVENT_TYPE = feconf.EVENT_TYPE_SOLUTION_HIT
+
+    @classmethod
+    def _handle_event(
+            cls, exp_id, exp_version, state_name, session_id,
+            time_spent_in_state_secs):
+        stats_models.SolutionHitEventLogEntryModel.create(
+            exp_id, exp_version, state_name, session_id,
+            time_spent_in_state_secs)
 
 
 class StartExplorationEventHandler(BaseEventHandler):
@@ -105,8 +161,9 @@ class StartExplorationEventHandler(BaseEventHandler):
     EVENT_TYPE = feconf.EVENT_TYPE_START_EXPLORATION
 
     @classmethod
-    def _handle_event(cls, exp_id, exp_version, state_name, session_id,
-                      params, play_type):
+    def _handle_event(
+            cls, exp_id, exp_version, state_name, session_id, params,
+            play_type):
         stats_models.StartExplorationEventLogEntryModel.create(
             exp_id, exp_version, state_name, session_id, params,
             play_type)
@@ -140,12 +197,23 @@ class CompleteExplorationEventHandler(BaseEventHandler):
             params, play_type)
 
 
+class RateExplorationEventHandler(BaseEventHandler):
+    """Event handler for recording exploration rating events."""
+
+    EVENT_TYPE = feconf.EVENT_TYPE_RATE_EXPLORATION
+
+    @classmethod
+    def _handle_event(cls, exploration_id, user_id, rating, old_rating):
+        stats_models.RateExplorationEventLogEntryModel.create(
+            exploration_id, user_id, rating, old_rating)
+
+
 class StateHitEventHandler(BaseEventHandler):
     """Event handler for recording state hit events."""
 
     EVENT_TYPE = feconf.EVENT_TYPE_STATE_HIT
 
-    # TODO(sll): remove params before sending this event to the jobs taskqueue
+    # TODO(sll): remove params before sending this event to the jobs taskqueue.
     @classmethod
     def _handle_event(
             cls, exp_id, exp_version, state_name, session_id,
@@ -153,6 +221,34 @@ class StateHitEventHandler(BaseEventHandler):
         stats_models.StateHitEventLogEntryModel.create(
             exp_id, exp_version, state_name, session_id,
             params, play_type)
+
+
+class StateCompleteEventHandler(BaseEventHandler):
+    """Event handler for recording state complete events."""
+
+    EVENT_TYPE = feconf.EVENT_TYPE_STATE_COMPLETED
+
+    @classmethod
+    def _handle_event(
+            cls, exp_id, exp_version, state_name, session_id,
+            time_spent_in_state_secs):
+        stats_models.StateCompleteEventLogEntryModel.create(
+            exp_id, exp_version, state_name, session_id,
+            time_spent_in_state_secs)
+
+
+class LeaveForRefresherExpEventHandler(BaseEventHandler):
+    """Event handler for recording "leave for refresher exploration" events."""
+
+    EVENT_TYPE = feconf.EVENT_TYPE_LEAVE_FOR_REFRESHER_EXP
+
+    @classmethod
+    def _handle_event(
+            cls, exp_id, refresher_exp_id, exp_version, state_name, session_id,
+            time_spent_in_state_secs):
+        stats_models.LeaveForRefresherExplorationEventLogEntryModel.create(
+            exp_id, refresher_exp_id, exp_version, state_name, session_id,
+            time_spent_in_state_secs)
 
 
 class FeedbackThreadCreatedEventHandler(BaseEventHandler):
@@ -172,33 +268,6 @@ class FeedbackThreadStatusChangedEventHandler(BaseEventHandler):
 
     @classmethod
     def _handle_event(cls, exp_id, old_status, new_status):
-        pass
-
-
-class ExplorationContentChangeEventHandler(BaseEventHandler):
-    """Event handler for receiving exploration change events. This event is
-    triggered whenever changes to an exploration's contents or metadata (title,
-    blurb etc.) are persisted. This includes when a a new exploration is
-    created.
-    """
-
-    EVENT_TYPE = feconf.EVENT_TYPE_EXPLORATION_CHANGE
-
-    @classmethod
-    def _handle_event(cls, *args, **kwargs):
-        pass
-
-
-class ExplorationStatusChangeEventHandler(BaseEventHandler):
-    """Event handler for receiving exploration status change events.
-    These events are triggered whenever an exploration is published,
-    publicized, unpublished or unpublicized.
-    """
-
-    EVENT_TYPE = feconf.EVENT_TYPE_EXPLORATION_STATUS_CHANGE
-
-    @classmethod
-    def _handle_event(cls, *args, **kwargs):
         pass
 
 

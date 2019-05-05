@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Python configuration for EndExploration interaction."""
+
 from extensions.interactions import base
 
 
@@ -25,20 +27,26 @@ class EndExploration(base.BaseInteraction):
     containing it.
     """
 
-    name = 'End Conversation'
+    name = 'End Exploration'
     description = (
-        'Suggests recommendations for explorations to try next.')
-    display_mode = base.DISPLAY_MODE_SUPPLEMENTAL
+        'Ends the exploration, and suggests recommendations for explorations '
+        'to try next.')
+    display_mode = base.DISPLAY_MODE_INLINE
     is_terminal = True
     _dependency_ids = []
-    answer_type = 'Null'
+    instructions = None
+    narrow_instructions = None
+    needs_summary = False
+    # Linear interactions are not supposed to have a solution.
+    can_have_solution = False
+    show_generic_submit_button = False
 
     _customization_arg_specs = [{
         'name': 'recommendedExplorationIds',
         'description': (
-            'IDs of explorations to recommend to the learner (maximum of 8). '
-            '(The ID of an exploration is the string of characters appearing '
-            'after \'/explore/\' in the URL bar.)'),
+            'IDs of explorations to recommend to the learner (at most 3 are '
+            'shown). The ID of an exploration is the string of characters '
+            'appearing after \'/explore/\' in the URL bar.'),
         'schema': {
             'type': 'list',
             'items': {

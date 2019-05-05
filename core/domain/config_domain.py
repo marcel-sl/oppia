@@ -1,3 +1,5 @@
+# coding: utf-8
+#
 # Copyright 2014 The Oppia Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,17 +16,14 @@
 
 """Domain objects for configuration properties."""
 
-__author__ = 'Sean Lip'
-
-
-from core.domain import user_services
 from core.platform import models
-(config_models,) = models.Registry.import_models([models.NAMES.config])
-memcache_services = models.Registry.import_memcache_services()
+import feconf
 import schema_utils
 
+(config_models,) = models.Registry.import_models([models.NAMES.config])
+memcache_services = models.Registry.import_memcache_services()
 
-COMPUTED_PROPERTY_PREFIX = 'computed:'
+CMD_CHANGE_PROPERTY_VALUE = 'change_property_value'
 
 SET_OF_STRINGS_SCHEMA = {
     'type': 'list',
@@ -36,52 +35,109 @@ SET_OF_STRINGS_SCHEMA = {
     }],
 }
 
+VMID_SHARED_SECRET_KEY_SCHEMA = {
+    'type': 'list',
+    'items': {
+        'type': 'dict',
+        'properties': [{
+            'name': 'vm_id',
+            'schema': {
+                'type': 'unicode'
+            }
+        }, {
+            'name': 'shared_secret_key',
+            'schema': {
+                'type': 'unicode'
+            }
+        }]
+    }
+}
+
+BOOL_SCHEMA = {
+    'type': schema_utils.SCHEMA_TYPE_BOOL
+}
+
+UNICODE_SCHEMA = {
+    'type': schema_utils.SCHEMA_TYPE_UNICODE
+}
+
+FLOAT_SCHEMA = {
+    'type': schema_utils.SCHEMA_TYPE_FLOAT
+}
+
 
 class ConfigProperty(object):
     """A property with a name and a default value.
 
     NOTE TO DEVELOPERS: These config properties are deprecated. Do not reuse
     these names:
-    - admin_email_address
-    - banner_alt_text
-    - contribute_gallery_page_announcement
-    - editor_page_announcement
-    - editor_prerequisites_agreement
-    - full_site_url
-    - splash_page_exploration_id
-    - splash_page_exploration_version
+    - about_page_youtube_video_id.
+    - admin_email_address.
+    - admin_ids.
+    - admin_usernames.
+    - allow_yaml_file_upload.
+    - banned_usernames.
+    - banner_alt_text.
+    - before_end_body_tag_hook.
+    - carousel_slides_config.
+    - collection_editor_whitelist.
+    - contact_email_address.
+    - contribute_gallery_page_announcement.
+    - disabled_explorations.
+    - editor_page_announcement.
+    - editor_prerequisites_agreement.
+    - embedded_google_group_url.
+    - full_site_url.
+    - moderator_ids.
+    - moderator_request_forum_url.
+    - moderator_usernames.
+    - publicize_exploration_email_html_body.
+    - sharing_options.
+    - sharing_options_twitter_text.
+    - sidebar_menu_additional_links.
+    - site_forum_url.
+    - social_media_buttons.
+    - splash_page_exploration_id.
+    - splash_page_exploration_version.
+    - splash_page_youtube_video_id.
+    - ssl_challenge_responses.
+    - whitelisted_email_senders.
     """
 
-    def refresh_default_value(self, default_value):
-        pass
-
     def __init__(self, name, schema, description, default_value):
-        if name in Registry._config_registry:
+        if Registry.get_config_property(name):
             raise Exception('Property with name %s already exists' % name)
 
         self._name = name
-        # TODO(sll): Validate the schema.
         self._schema = schema
         self._description = description
         self._default_value = schema_utils.normalize_against_schema(
             default_value, self._schema)
 
-        Registry._config_registry[self.name] = self
+        Registry.init_config_property(self.name, self)
 
     @property
     def name(self):
+        """Returns the name of the configuration property."""
+
         return self._name
 
     @property
     def schema(self):
+        """Returns the schema of the configuration property."""
+
         return self._schema
 
     @property
     def description(self):
+        """Returns the description of the configuration property."""
+
         return self._description
 
     @property
     def default_value(self):
+        """Returns the default value of the configuration property."""
+
         return self._default_value
 
     @property
@@ -101,31 +157,40 @@ class ConfigProperty(object):
 
         return self.default_value
 
+    def set_value(self, committer_id, raw_value):
+        """Sets the value of the property. In general, this should not be
+        called directly -- use config_services.set_property() instead.
+        """
+        value = self.normalize(raw_value)
+
+        # Set value in datastore.
+        model_instance = config_models.ConfigPropertyModel.get(
+            self.name, strict=False)
+        if model_instance is None:
+            model_instance = config_models.ConfigPropertyModel(
+                id=self.name)
+        model_instance.value = value
+        model_instance.commit(
+            committer_id, [{
+                'cmd': CMD_CHANGE_PROPERTY_VALUE,
+                'new_value': value
+            }])
+
+        # Set value in memcache.
+        memcache_services.set_multi({
+            model_instance.id: model_instance.value})
+
     def normalize(self, value):
+        """Validates the given object using the schema and normalizes if
+        necessary.
+
+        Args:
+            value: The value of the configuration property.
+
+        Returns:
+            instance. The normalized object.
+        """
         return schema_utils.normalize_against_schema(value, self._schema)
-
-
-class ComputedProperty(ConfigProperty):
-    """A property whose default value is computed using a given function."""
-
-    def refresh_default_value(self):
-        memcache_services.delete_multi([self.name])
-        self._default_value = self.fn(*self.args)
-
-    def __init__(self, name, schema, description, fn, *args):
-        self.fn = fn
-        self.args = args
-
-        default_value = self.fn(*self.args)
-        super(ComputedProperty, self).__init__(
-            '%s%s' % (COMPUTED_PROPERTY_PREFIX, name),
-            schema, description, default_value)
-
-    @property
-    def value(self):
-        """Compute the value on the fly."""
-        self.refresh_default_value()
-        return self.default_value
 
 
 class Registry(object):
@@ -136,7 +201,27 @@ class Registry(object):
     _config_registry = {}
 
     @classmethod
+    def init_config_property(cls, name, instance):
+        """Initializes _config_registry with keys as the property names and
+        values as instances of the specified property.
+
+        Args:
+            name: str. The name of the configuration property.
+            instance: *. The instance of the configuration property.
+        """
+        cls._config_registry[name] = instance
+
+    @classmethod
     def get_config_property(cls, name):
+        """Returns the instance of the specified name of the configuration
+        property.
+
+        Args:
+            name: str. The name of the configuration property.
+
+        Returns:
+            instance. The instance of the specified configuration property.
+        """
         return cls._config_registry.get(name)
 
     @classmethod
@@ -149,76 +234,43 @@ class Registry(object):
         schemas_dict = {}
 
         for (property_name, instance) in cls._config_registry.iteritems():
-            if not property_name.startswith(COMPUTED_PROPERTY_PREFIX):
-                schemas_dict[property_name] = {
-                    'schema': instance.schema,
-                    'description': instance.description,
-                    'value': instance.value
-                }
+            schemas_dict[property_name] = {
+                'schema': instance.schema,
+                'description': instance.description,
+                'value': instance.value
+            }
 
         return schemas_dict
 
-    @classmethod
-    def get_computed_property_names(cls):
-        """Return a list of computed property names."""
-        computed_properties = {}
 
-        for (property_name, instance) in cls._config_registry.iteritems():
-            if property_name.startswith(COMPUTED_PROPERTY_PREFIX):
-                computed_properties[property_name] = {
-                    'description': instance.description
-                }
+PROMO_BAR_ENABLED = ConfigProperty(
+    'promo_bar_enabled', BOOL_SCHEMA,
+    'Whether the promo bar should be enabled for all users', False)
+PROMO_BAR_MESSAGE = ConfigProperty(
+    'promo_bar_message', UNICODE_SCHEMA,
+    'The message to show to all users if the promo bar is enabled', '')
 
-        return computed_properties
+VMID_SHARED_SECRET_KEY_MAPPING = ConfigProperty(
+    'vmid_shared_secret_key_mapping', VMID_SHARED_SECRET_KEY_SCHEMA,
+    'VMID and shared secret key corresponding to that VM',
+    [{
+        'vm_id': feconf.DEFAULT_VM_ID,
+        'shared_secret_key': feconf.DEFAULT_VM_SHARED_SECRET
+    }])
 
-
-def update_admin_ids():
-    """Refresh the list of admin user_ids based on the emails entered."""
-    admin_emails_config = Registry.get_config_property(
-        'admin_emails')
-    if not admin_emails_config:
-        return []
-
-    admin_ids = []
-    for email in admin_emails_config.value:
-        user_id = user_services.get_user_id_from_email(email)
-        if user_id is not None:
-            admin_ids.append(user_id)
-        else:
-            raise Exception('Bad admin email: %s' % email)
-    return admin_ids
-
-
-def update_moderator_ids():
-    """Refresh the list of moderator user_ids based on the emails entered."""
-    moderator_emails_config = Registry.get_config_property(
-        'moderator_emails')
-    if not moderator_emails_config:
-        return []
-
-    moderator_ids = []
-    for email in moderator_emails_config.value:
-        user_id = user_services.get_user_id_from_email(email)
-        if user_id is not None:
-            moderator_ids.append(user_id)
-        else:
-            raise Exception('Bad moderator email: %s' % email)
-    return moderator_ids
-
-
-ADMIN_IDS = ComputedProperty(
-    'admin_ids', SET_OF_STRINGS_SCHEMA, 'Admin ids', update_admin_ids)
-MODERATOR_IDS = ComputedProperty(
-    'moderator_ids', SET_OF_STRINGS_SCHEMA, 'Moderator ids',
-    update_moderator_ids)
-
-ADMIN_EMAILS = ConfigProperty(
-    'admin_emails', SET_OF_STRINGS_SCHEMA, 'Email addresses of admins', [])
-MODERATOR_EMAILS = ConfigProperty(
-    'moderator_emails', SET_OF_STRINGS_SCHEMA, 'Email addresses of moderators',
-    [])
-BANNED_USERNAMES = ConfigProperty(
-    'banned_usernames',
+WHITELISTED_EXPLORATION_IDS_FOR_PLAYTHROUGHS = ConfigProperty(
+    'whitelisted_exploration_ids_for_playthroughs',
     SET_OF_STRINGS_SCHEMA,
-    'Banned usernames (editing permissions for these users have been removed)',
-    [])
+    'The set of exploration IDs for recording playthrough issues', [
+        'umPkwp0L1M0-', 'MjZzEVOG47_1', '9trAQhj6uUC2', 'rfX8jNkPnA-1',
+        '0FBWxCE5egOw', '670bU6d9JGBh', 'aHikhPlxYgOH', '-tMgcP1i_4au',
+        'zW39GLG_BdN2', 'Xa3B_io-2WI5', '6Q6IyIDkjpYC', 'osw1m5Q3jK41'])
+
+RECORD_PLAYTHROUGH_PROBABILITY = ConfigProperty(
+    'record_playthrough_probability', FLOAT_SCHEMA,
+    'The probability of recording playthroughs', 0.2)
+
+IS_IMPROVEMENTS_TAB_ENABLED = ConfigProperty(
+    'is_improvements_tab_enabled', BOOL_SCHEMA,
+    'Exposes the Improvements Tab for creators in the exploration editor.',
+    False)

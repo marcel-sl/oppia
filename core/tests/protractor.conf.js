@@ -49,29 +49,116 @@ exports.config = {
 
   // The timeout for each script run on the browser. This should be longer
   // than the maximum time your application needs to stabilize between tasks.
-  allScriptsTimeout: 30000,
+  // (Note that the hint tooltip has a 60-second timeout.)
+  allScriptsTimeout: 180000,
 
   // ----- What tests to run -----
   //
-  // Spec patterns are relative to the location of this config.
-  specs: [
-    'protractor/*.js'
-  ],
-
-  // Patterns to exclude.
-  exclude: [],
-
-  /*
-
-  // Alternatively, suites may be used. When run without a command line parameter,
-  // all suites will run. If run with --suite=smoke, only the patterns matched
-  // by that suite will run.
+  // When run without a command line parameter, all suites will run. If run
+  // with --suite=smoke, only the patterns matched by that suite will run.
   suites: {
-    smoke: 'spec/smoketests/*.js',
-    full: 'spec/*.js'
-  },
+    // The tests on Travis are run individually to parallelize
+    // them. Therefore, we mention the complete directory
+    // in 'full'.
+    full: [
+      'protractor/*.js',
+      'protractor_desktop/*.js'
+    ],
 
-  */
+    // Unfortunately, adding more than one file to a test suite results in
+    // severe instability as of Chromedriver 2.38 (Chrome 66).
+    accessibility: [
+      'protractor/accessibility.js'
+    ],
+
+    additionalEditorAndPlayerFeatures: [
+      'protractor_desktop/additionalEditorAndPlayerFeatures.js'
+    ],
+
+    collections: [
+      'protractor_desktop/collections.js'
+    ],
+
+    coreEditorAndPlayerFeatures: [
+      'protractor_desktop/coreEditorAndPlayerFeatures.js'
+    ],
+
+    embedding: [
+      'protractor_desktop/embedding.js'
+    ],
+
+    explorationFeedbackTab: [
+      'protractor_desktop/explorationFeedbackTab.js'
+    ],
+
+    explorationHistoryTab: [
+      'protractor_desktop/explorationHistoryTab.js'
+    ],
+
+    explorationStatisticsTab: [
+      'protractor_desktop/explorationStatisticsTab.js'
+    ],
+
+    explorationTranslationTab: [
+      'protractor_desktop/explorationTranslationTab.js'
+    ],
+
+    extensions: [
+      'protractor_desktop/extensions.js'
+    ],
+
+    learnerDashboard: [
+      'protractor_desktop/learnerDashboard.js'
+    ],
+
+    learner: [
+      'protractor/learnerFlow.js'
+    ],
+
+    library: [
+      'protractor/libraryFlow.js'
+    ],
+
+    navigation: [
+      'protractor_desktop/navigation.js'
+    ],
+
+    preferences: [
+      'protractor_desktop/preferences.js'
+    ],
+
+    profileFeatures: [
+      'protractor_desktop/profileFeatures.js'
+    ],
+
+    profileMenu: [
+      'protractor/profileMenuFlow.js'
+    ],
+
+    publication: [
+      'protractor_desktop/publicationAndLibrary.js'
+    ],
+
+    subscriptions: [
+      'protractor/subscriptionsFlow.js'
+    ],
+
+    topicAndStoryEditor: [
+      'protractor_desktop/topicAndStoryEditor.js'
+    ],
+
+    topicsAndSkillsDashboard: [
+      'protractor_desktop/topicsAndSkillsDashboard.js'
+    ],
+
+    skillEditor: [
+      'protractor_desktop/skillEditor.js'
+    ],
+
+    users: [
+      'protractor_desktop/userJourneys.js',
+    ],
+  },
 
   // ----- Capabilities to be passed to the webdriver instance ----
   //
@@ -80,7 +167,19 @@ exports.config = {
   // and
   // https://code.google.com/p/selenium/source/browse/javascript/webdriver/capabilities.js
   capabilities: {
-    browserName: 'chrome'
+    browserName: 'chrome',
+    chromeOptions: {
+      args: ['--lang=en-EN', '--window-size=1285x1000']
+    },
+    prefs: {
+      intl: {
+        accept_languages: 'en-EN'
+      }
+    },
+    loggingPrefs: {
+      driver: 'INFO',
+      browser: 'INFO'
+    }
   },
 
   // If you would like to run more than one instance of webdriver on the same
@@ -92,7 +191,7 @@ exports.config = {
   //
   // A base URL for your application under test. Calls to protractor.get()
   // with relative paths will be prepended with this.
-  baseUrl: 'http://localhost:4445',
+  baseUrl: 'http://localhost:9001',
 
   // Selector for the element housing the angular app - this defaults to
   // body, but is necessary if ng-app is on a descendant of <body>
@@ -103,6 +202,7 @@ exports.config = {
   // You can specify a file containing code to run by setting onPrepare to
   // the filename string.
   onPrepare: function() {
+    browser.isMobile = false;
     // At this point, global 'protractor' object will be set up, and jasmine
     // will be available. For example, you can add a Jasmine reporter with:
     //     jasmine.getEnv().addReporter(new jasmine.JUnitXmlReporter(
@@ -122,16 +222,22 @@ exports.config = {
         // Directory for screenshots
         baseDirectory: '../protractor-screenshots',
         // Function to build filenames of screenshots
-        pathBuilder: function pathBuilder(spec, descriptions, results, capabilities) {
+        pathBuilder: function(spec, descriptions, results, capabilities) {
           return descriptions[1] + ' ' + descriptions[0];
         },
         takeScreenShotsOnlyForFailedSpecs: true
       }));
     }
 
-    // Set a wide enough window size for the navbar in the gallery to display
-    // fully.
-    browser.driver.manage().window().setSize(1200, 1000);
+    var SpecReporter = require('jasmine-spec-reporter').SpecReporter;
+    jasmine.getEnv().addReporter(new SpecReporter({
+      displayStacktrace: 'all',
+      displaySpecDuration: true
+    }));
+
+    // Set a wide enough window size for the navbar in the library pages to
+    // display fully.
+    browser.driver.manage().window().setSize(1285, 1000);
   },
 
   // The params object will be passed directly to the protractor instance,
@@ -151,13 +257,13 @@ exports.config = {
   // Jasmine and Cucumber are fully supported as a test and assertion framework.
   // Mocha has limited beta support. You will need to include your own
   // assertion framework if working with mocha.
-  framework: 'jasmine',
+  framework: 'jasmine2',
 
   // ----- Options to be passed to minijasminenode -----
   //
   // See the full list at https://github.com/juliemr/minijasminenode
   jasmineNodeOpts: {
-    // onComplete will be called just before the driver quits.
+    // The onComplete method will be called just before the driver quits.
     onComplete: null,
     // If true, display spec names.
     isVerbose: false,
@@ -166,7 +272,7 @@ exports.config = {
     // If true, include stack traces in failures.
     includeStackTrace: true,
     // Default time to wait in ms before a test fails.
-    defaultTimeoutInterval: 600000
+    defaultTimeoutInterval: 1200000
   },
 
   // ----- Options to be passed to mocha -----

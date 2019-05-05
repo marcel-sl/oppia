@@ -14,36 +14,24 @@
 
 """Controllers for Oppia resources (templates, images)."""
 
-__author__ = 'sll@google.com (Sean Lip)'
-
 import logging
-import mimetypes
 import urllib
 
+from constants import constants
+from core.controllers import acl_decorators
 from core.controllers import base
+from core.domain import config_domain
 from core.domain import fs_domain
-from core.domain import obj_services
 from core.domain import value_generators_domain
 import feconf
-
-
-class ObjectEditorTemplateHandler(base.BaseHandler):
-    """Retrieves a template for an object editor."""
-
-    def get(self, obj_type):
-        """Handles GET requests."""
-        try:
-            self.response.write(
-                obj_services.Registry.get_object_class_by_type(
-                    obj_type).get_editor_html_template())
-        except Exception as e:
-            logging.error('Object editor not found: %s. %s' % (obj_type, e))
-            raise self.PageNotFoundException
 
 
 class ValueGeneratorHandler(base.BaseHandler):
     """Retrieves the HTML template for a value generator editor."""
 
+    GET_HANDLER_ERROR_RETURN_TYPE = feconf.HANDLER_TYPE_JSON
+
+    @acl_decorators.open_access
     def get(self, generator_id):
         """Handles GET requests."""
         try:
@@ -56,28 +44,64 @@ class ValueGeneratorHandler(base.BaseHandler):
             raise self.PageNotFoundException
 
 
-class ImageHandler(base.BaseHandler):
-    """Handles image retrievals."""
+class AssetDevHandler(base.BaseHandler):
+    """Handles image and audio retrievals (only in dev -- in production,
+    image and audio files are served from GCS).
+    """
 
-    def get(self, exploration_id, encoded_filepath):
-        """Returns an image.
+    _SUPPORTED_TYPES = ['image', 'audio']
+
+    GET_HANDLER_ERROR_RETURN_TYPE = feconf.HANDLER_TYPE_JSON
+
+    @acl_decorators.open_access
+    def get(self, exploration_id, asset_type, encoded_filename):
+        """Returns an asset file.
 
         Args:
-            exploration_id: the id of the exploration.
-            encoded_filepath: a string representing the image filepath. This
+            exploration_id: str. The id of the exploration.
+            asset_type: str. Type of the asset, either image or audio.
+            encoded_filename: str. The asset filename. This
               string is encoded in the frontend using encodeURIComponent().
         """
+        if not constants.DEV_MODE:
+            raise self.PageNotFoundException
+        if asset_type not in self._SUPPORTED_TYPES:
+            raise Exception('%s is not a supported asset type.' % asset_type)
         try:
-            filepath = urllib.unquote(encoded_filepath)
-            file_format = filepath[(filepath.rfind('.') + 1):]
+            filename = urllib.unquote(encoded_filename)
+            file_format = filename[(filename.rfind('.') + 1):]
+
             # If the following is not cast to str, an error occurs in the wsgi
             # library because unicode gets used.
             self.response.headers['Content-Type'] = str(
-                'image/%s' % file_format)
+                '%s/%s' % (asset_type, file_format))
 
             fs = fs_domain.AbstractFileSystem(
-                fs_domain.ExplorationFileSystem(exploration_id))
-            raw = fs.get(filepath)
+                fs_domain.ExplorationFileSystem(
+                    'exploration/%s' % exploration_id))
+            raw = fs.get('%s/%s' % (asset_type, filename))
+
+            self.response.cache_control.no_cache = None
+            self.response.cache_control.public = True
+            self.response.cache_control.max_age = 600
             self.response.write(raw)
         except:
             raise self.PageNotFoundException
+
+
+class PromoBarHandler(base.BaseHandler):
+    """The handler for checking if Promobar is enabled and fetching
+    promobar message.
+    """
+
+    GET_HANDLER_ERROR_RETURN_TYPE = feconf.HANDLER_TYPE_JSON
+    # This prevents partially logged in user from being logged out
+    # during user registration.
+    REDIRECT_UNFINISHED_SIGNUPS = False
+
+    @acl_decorators.open_access
+    def get(self):
+        self.render_json({
+            'promo_bar_enabled': config_domain.PROMO_BAR_ENABLED.value,
+            'promo_bar_message': config_domain.PROMO_BAR_MESSAGE.value
+        })

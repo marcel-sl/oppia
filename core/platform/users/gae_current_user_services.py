@@ -16,10 +16,9 @@
 
 """Provides a seam for user-related services."""
 
-__author__ = 'Sean Lip'
+import logging
 
 import feconf
-import logging
 import utils
 
 from google.appengine.api import users
@@ -27,32 +26,27 @@ from google.appengine.ext import ndb
 
 
 def create_login_url(slug):
-    """Creates a login url."""
-    return users.create_login_url(utils.set_url_query_parameter(
-        feconf.SIGNUP_URL, 'return_url', slug))
+    """Creates a login url.
+
+    Args:
+        slug: str. The URL to redirect to after login.
+
+    Returns:
+        str. The correct login URL that includes the page to redirect to.
+    """
+    return users.create_login_url(
+        dest_url=utils.set_url_query_parameter(
+            feconf.SIGNUP_URL, 'return_url', slug))
 
 
-def create_logout_url(slug):
-    """Creates a logout url."""
-    logout_url = utils.set_url_query_parameter('/logout', 'return_url', slug)
-    return logout_url
-
-
-def get_current_user(request):
+def get_current_user():
     """Returns the current user."""
     return users.get_current_user()
 
 
-def is_super_admin(user_id, request):
-    """Checks whether the user with the given user_id owns this app.
-
-    For GAE, the user in question is also required to be the current user.
-    """
-    user = users.get_current_user()
-    if user is None:
-        return False
-
-    return user.user_id() == user_id and users.is_current_user_admin()
+def is_current_user_super_admin():
+    """Checks whether the current user owns this app."""
+    return users.is_current_user_admin()
 
 
 def get_user_id_from_email(email):
@@ -61,32 +55,46 @@ def get_user_id_from_email(email):
     Returns None if the email address does not correspond to a valid user id.
     """
     class _FakeUser(ndb.Model):
+        """A fake user class."""
         _use_memcache = False
         _use_cache = False
         user = ndb.UserProperty(required=True)
 
     try:
-        u = users.User(email)
+        fake_user = users.User(email)
     except users.UserNotFoundError:
         logging.error(
             'The email address %s does not correspond to a valid user_id'
             % email)
         return None
 
-    key = _FakeUser(id=email, user=u).put()
+    key = _FakeUser(id=email, user=fake_user).put()
     obj = _FakeUser.get_by_id(key.id())
     user_id = obj.user.user_id()
-    if user_id:
-        return unicode(user_id)
-    else:
+    return unicode(user_id) if user_id else None
+
+
+def get_current_user_id():
+    """Gets the user_id of current user.
+
+    Returns:
+        str or None. User id for the current user.
+    """
+    user = get_current_user()
+    if user is None:
         return None
+    else:
+        return user.user_id()
 
 
-def get_user_id(user):
-    """ Given an user object, get the user id. """
-    return user.user_id()
+def get_current_user_email():
+    """Get the email for current user.
 
-
-def get_user_email(user):
-    """ Given an user object, get the user's email. """
-    return user.email()
+    Returns:
+        str or None. Email for the current user.
+    """
+    user = get_current_user()
+    if user is None:
+        return None
+    else:
+        return user.email()

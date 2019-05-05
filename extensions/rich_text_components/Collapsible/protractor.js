@@ -15,11 +15,10 @@
 /**
  * @fileoverview Utilities for using the Collapsible component during
  * end-to-end testing with Protractor.js
- *
- * @author Jacob Davis (jacobdavis11@gmail.com)
  */
 
 var forms = require('../../../core/tests/protractor_utils/forms.js');
+var general = require('../../../core/tests/protractor_utils/general.js');
 
 var customizeComponent = function(modal, heading, contentInstructions) {
   forms.UnicodeEditor(
@@ -31,14 +30,16 @@ var customizeComponent = function(modal, heading, contentInstructions) {
   contentInstructions(richTextEditor);
 };
 
-var expectComponentDetailsToMatch = function(elem, heading, contentInstructions) {
-  expect(
-    elem.element(by.css('.protractor-test-collapsible-heading')).getText()
-  ).toMatch(heading);
+var expectComponentDetailsToMatch = function(
+    elem, heading, contentInstructions) {
+  var headerElement = elem.element(by.css(
+    '.protractor-test-collapsible-heading'));
+  expect(headerElement.getText()).toMatch(heading);
   // Open the collapsible block so we can examine it.
-  element(by.css('.glyphicon-plus-sign')).click();
+  headerElement.click();
   forms.expectRichText(
-    elem.element(by.css('.panel-body')).element(by.xpath('./div'))
+    elem.element(by.css('.panel-body')).element(by.css(
+      '.protractor-test-collapsible-content'))
   ).toMatch(contentInstructions);
 };
 

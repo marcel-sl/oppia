@@ -16,15 +16,16 @@
 
 """Configuration for JavaScript library dependencies."""
 
-__author__ = 'Sean Lip'
-
 
 # A dict mapping dependency ids to the Angular module names they
 # should insert when the Angular app is first initialized.
 DEPENDENCIES_TO_ANGULAR_MODULES_DICT = {
     'codemirror': ['ui.codemirror'],
-    'google_maps': ['ui.map'],
-    'jsrepl': [],
+    'ui_leaflet': ['ui-leaflet'],
+    'guppy': [],
     'logic_proof': [],
+    'math_expressions': [],
     'midijs': [],
+    'pencilcode': [],
+    'skulpt': [],
 }

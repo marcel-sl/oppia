@@ -1,31 +1,5 @@
-<link rel="stylesheet" type="text/css" href="/extensions/interactions/EndExploration/static/css/EndExploration.css">
-
-<script type="text/ng-template" id="interaction/EndExploration">
-  <div ng-if="recommendedExplorationIds.length > 0">
-    <span class="oppia-end-exploration-recommendation-introduction">
-      Other explorations you might enjoy:
-    </span>
-    <div style="color: red;" ng-repeat="expId in invalidExpIds" ng-if="isInEditorPreviewMode">
-      <strong>Error:</strong> no published exploration found with ID '<[expId]>'
-    </div>
-    <div layout="row" layout-wrap>
-      <md-card class="oppia-end-exploration-recommendation-card" ng-repeat="expId in recommendedExplorationIds track by $index">
-        <a ng-href="/explore/<[expId]>" target="<[isIframed ? '_blank' : '_self']>" ng-if="recommendedExplorationSummaries[$index]">
-          <img class="oppia-end-exploration-recommendation-image" ng-src="<[recommendedExplorationSummaries[$index].thumbnail_image_url]>">
-          <div class="oppia-end-exploration-recommendation-title">
-            <[recommendedExplorationSummaries[$index].title]>
-          </div>
-        </a>
-      </md-card>
-    </div>
-  </div>
-
-  <div ng-if="!isIframed" class="oppia-end-exploration-gallery-button">
-    <a class="btn btn-default" href="/" style="font-size: 1.1em;">
-      Return to gallery
-    </a>
-  </div>
-</script>
-
-<script type="text/ng-template" id="response/EndExploration">
-</script>
+<script src="/extensions/interactions/EndExploration/directives/OppiaInteractiveEndExplorationDirective.js"></script>
+<script src="/extensions/interactions/EndExploration/directives/OppiaResponseEndExplorationDirective.js"></script>
+<script src="/extensions/interactions/EndExploration/directives/OppiaShortResponseEndExplorationDirective.js"></script>
+<script src="/extensions/interactions/EndExploration/directives/EndExplorationRulesService.js"></script>
+<script src="/extensions/interactions/EndExploration/directives/EndExplorationValidationService.js"></script>

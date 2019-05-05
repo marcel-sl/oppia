@@ -14,27 +14,40 @@
 
 """Main package for URL routing and the index page."""
 
-__author__ = 'Sean Lip'
-
-import feconf
-
+# pylint: disable=relative-import
 from core.controllers import cron
 from core.platform import models
-transaction_services = models.Registry.import_transaction_services()
+import feconf
 import main
 
 import webapp2
 
+# pylint: enable=relative-import
+
+
+transaction_services = models.Registry.import_transaction_services()
+
 # Register the URLs with the classes responsible for handling them.
-urls = [
+URLS = [
     main.get_redirect_route(
-        r'/cron/mail/admin/job_status', cron.JobStatusMailerHandler,
-        'job_failure_mailer'),
+        r'/cron/mail/admin/job_status', cron.JobStatusMailerHandler),
     main.get_redirect_route(
-        r'/cron/jobs/cleanup', cron.CronMapreduceCleanupHandler,
-        'job_cleanup_handler'),
+        r'/cron/users/dashboard_stats', cron.CronDashboardStatsHandler),
+    main.get_redirect_route(
+        r'/cron/explorations/recommendations',
+        cron.CronExplorationRecommendationsHandler),
+    main.get_redirect_route(
+        r'/cron/explorations/search_rank',
+        cron.CronActivitySearchRankHandler),
+    main.get_redirect_route(
+        r'/cron/jobs/cleanup', cron.CronMapreduceCleanupHandler),
+    main.get_redirect_route(
+        r'/cron/suggestions/accept_stale_suggestions',
+        cron.CronAcceptStaleSuggestionsHandler),
+    main.get_redirect_route(
+        '/cron/suggestions/notify_reviewers',
+        cron.CronMailReviewersInRotationHandler)
 ]
 
-
-app = transaction_services.toplevel_wrapper(
-    webapp2.WSGIApplication(urls, debug=feconf.DEBUG))
+app = transaction_services.toplevel_wrapper(  # pylint: disable=invalid-name
+    webapp2.WSGIApplication(URLS, debug=feconf.DEBUG))

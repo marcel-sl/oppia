@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Python configuration for SetInput interaction."""
+
 from extensions.interactions import base
 
 
@@ -22,10 +24,38 @@ class SetInput(base.BaseInteraction):
 
     name = 'Set Input'
     description = 'Allows learners to enter an unordered set of strings.'
-    display_mode = base.DISPLAY_MODE_SUPPLEMENTAL
+    display_mode = base.DISPLAY_MODE_INLINE
     _dependency_ids = []
     answer_type = 'SetOfUnicodeString'
+    instructions = None
+    narrow_instructions = None
+    needs_summary = False
+    can_have_solution = True
+    show_generic_submit_button = True
 
     # NB: There used to be a UnicodeString-typed parameter here called
     # 'element_type'. This has since been removed.
     _customization_arg_specs = []
+
+    _answer_visualization_specs = [{
+        # Table with answer counts for top N answers.
+        'id': 'FrequencyTable',
+        'options': {
+            'column_headers': ['Answer', 'Count'],
+            'title': 'Top 10 answers',
+        },
+        'calculation_id': 'Top10AnswerFrequencies',
+        'addressed_info_is_supported': True,
+    }, {
+        # Table with most commonly submitted elements of set.
+        'id': 'FrequencyTable',
+        'options': {
+            'column_headers': ['Element', 'Count'],
+            'title': 'Commonly submitted elements',
+        },
+        'calculation_id': 'FrequencyCommonlySubmittedElements',
+        # Since individual answer elements are not generally intended to be
+        # used as a single response to SetInput interactions, we omit the
+        # addressed column entirely.
+        'addressed_info_is_supported': False,
+    }]

@@ -19,120 +19,177 @@ source $(dirname $0)/setup.sh || exit 1
 
 # Download and install required JS and zip files.
 echo Installing third-party JS libraries and zip files.
-python scripts/install_third_party.py
+$PYTHON_CMD scripts/install_third_party.py
 
-# Check if the OS supports node.js and jsrepl installation; if not, return
-# to the calling script.
-if [ ! "${OS}" == "Darwin" -a ! "${OS}" == "Linux" ]; then
-  echo ""
-  echo "  WARNING: Unsupported OS for installation of node.js and jsrepl."
-  echo "  If you are running this script on Windows, see the instructions"
-  echo "  here regarding installation of node.js:"
-  echo ""
-  echo "    https://code.google.com/p/oppia/wiki/WindowsGuidelines"
-  echo ""
-  echo "  STATUS: Installation completed except for node.js and jsrepl. Exiting."
-  echo ""
-  exit 0
-fi
+# Install third-party node modules needed for the build process.
+$NPM_INSTALL --only=dev
 
-# If the OS supports it, download and install node.js and jsrepl.
-echo Checking if node.js is installed in $TOOLS_DIR
-if [ ! -d "$NODE_PATH" ]; then
-  echo Installing Node.js
-  if [ ${OS} == "Darwin" ]; then
-    if [ ${MACHINE_TYPE} == 'x86_64' ]; then
-      NODE_FILE_NAME=node-v0.10.33-darwin-x64
-    else
-      NODE_FILE_NAME=node-v0.10.33-darwin-x86
-    fi
-  elif [ ${OS} == "Linux" ]; then
-    if [ ${MACHINE_TYPE} == 'x86_64' ]; then
-      NODE_FILE_NAME=node-v0.10.33-linux-x64
-    else
-      NODE_FILE_NAME=node-v0.10.33-linux-x86
-    fi
-  fi
-
-  curl --silent http://nodejs.org/dist/v0.10.33/$NODE_FILE_NAME.tar.gz -o node-download.tgz
-  tar xzf node-download.tgz --directory $TOOLS_DIR
-  mv $TOOLS_DIR/$NODE_FILE_NAME $NODE_PATH
-  rm node-download.tgz
-fi
-
-# Prevent SELF_SIGNED_CERT_IN_CHAIN error as per
-#
-#   http://blog.npmjs.org/post/78085451721/npms-self-signed-certificate-is-no-more
-#
-$NPM_CMD config set ca ""
-
-echo Checking whether jsrepl is installed in third_party
-if [ ! "$NO_JSREPL" -a ! -d "$THIRD_PARTY_DIR/static/jsrepl" ]; then
-  echo Installing CoffeeScript
-  $NPM_INSTALL coffee-script@1.2.0 ||
-  {
-    echo ""
-    echo "  [oppia-message]"
-    echo ""
-    echo "  Instructions:"
-    echo "    If the script fails here, please try running these commands (you"
-    echo "    may need to use sudo):"
-    echo ""
-    echo "      chown -R $ME ~/.npm"
-    echo "      rm -rf ~/tmp"
-    echo ""
-    echo "    Then run the script again."
-    echo ""
-    echo "  What is happening:"
-    echo "    npm, a package manager that Oppia uses to install some of its"
-    echo "    dependencies, is putting things into the ~/tmp and ~/.npm"
-    echo "    folders, and then encounters issues with permissions."
-    echo ""
-    echo "  More information:"
-    echo "    http://stackoverflow.com/questions/16151018/npm-throws-error-without-sudo"
-    echo "    https://github.com/isaacs/npm/issues/3664"
-    echo "    https://github.com/isaacs/npm/issues/2952"
-    echo ""
-
-    exit 1
-  }
-
-  echo Installing uglify
-  $NPM_INSTALL uglify-js
-
-  if [ ! -d "$TOOLS_DIR/jsrepl/build" ]; then
-    echo Downloading jsrepl
+# Download and install Skulpt. Skulpt is built using a Python script included
+# within the Skulpt repository (skulpt.py). This script normally requires
+# GitPython, however the patches to it below (with the sed operations) lead to
+# it no longer being required. The Python script is used to avoid having to
+# manually recreate the Skulpt dist build process in install_third_party.py.
+# Note that skulpt.py will issue a warning saying its dist command will not
+# work properly without GitPython, but it does actually work due to the
+# patches.
+echo Checking whether Skulpt is installed in third_party
+if [ ! "$NO_SKULPT" -a ! -d "$THIRD_PARTY_DIR/static/skulpt-0.10.0" ]; then
+  if [ ! -d "$TOOLS_DIR/skulpt-0.10.0" ]; then
+    echo Downloading Skulpt
     cd $TOOLS_DIR
-    rm -rf jsrepl
-    git clone https://github.com/replit/jsrepl.git
-    cd jsrepl
-    # Use a specific version of the JSRepl repository.
-    git checkout 13f89c2cab0ee9163e0077102478958a14afb781
+    mkdir skulpt-0.10.0
+    cd skulpt-0.10.0
+    git clone https://github.com/skulpt/skulpt
+    cd skulpt
 
-    git submodule update --init --recursive
+    # Use a specific Skulpt release.
+    git checkout 0.10.0
 
-    # Add a temporary backup file so that this script works on both Linux and Mac.
+    # Add a temporary backup file so that this script works on both Linux and
+    # Mac.
     TMP_FILE=`mktemp /tmp/backup.XXXXXXXXXX`
 
-    echo Compiling jsrepl
-    # Sed fixes some issues:
-    # - Reducing jvm memory requirement from 4G to 1G.
-    # - This version of node uses fs.existsSync.
-    # - CoffeeScript is having trouble with octal representation.
-    # - Use our installed version of uglifyjs.
-    sed -e 's/Xmx4g/Xmx1g/' Cakefile |\
-    sed -e 's/path\.existsSync/fs\.existsSync/' |\
-    sed -e 's/0o755/493/' |\
-    sed -e 's,uglifyjs,'$NODE_MODULE_DIR'/.bin/uglifyjs,' > $TMP_FILE
-    mv $TMP_FILE Cakefile
-    export NODE_PATH=$NODE_MODULE_DIR
-    $NODE_MODULE_DIR/.bin/cake bake
+    echo Compiling Skulpt
+
+    # The Skulpt setup function needs to be tweaked. It fails without certain
+    # third party commands. These are only used for unit tests and generating
+    # documentation and are not necessary when building Skulpt.
+    sed -e "s/ret = test()/ret = 0/" $TOOLS_DIR/skulpt-0.10.0/skulpt/skulpt.py |\
+    sed -e "s/  doc()/  pass#doc()/" |\
+    # This and the next command disable unit and compressed unit tests for the
+    # compressed distribution of Skulpt. These tests don't work on some
+    # Ubuntu environments and cause a libreadline dependency issue.
+    sed -e "s/ret = os.system(\"{0}/ret = 0 #os.system(\"{0}/" |\
+    sed -e "s/ret = rununits(opt=True)/ret = 0/" > $TMP_FILE
+    mv $TMP_FILE $TOOLS_DIR/skulpt-0.10.0/skulpt/skulpt.py
+    $PYTHON_CMD $TOOLS_DIR/skulpt-0.10.0/skulpt/skulpt.py dist
 
     # Return to the Oppia root folder.
     cd $OPPIA_DIR
   fi
 
   # Move the build directory to the static resources folder.
-  mkdir -p $THIRD_PARTY_DIR/static/jsrepl
-  cp -r $TOOLS_DIR/jsrepl/build/* $THIRD_PARTY_DIR/static/jsrepl
+  mkdir -p $THIRD_PARTY_DIR/static/skulpt-0.10.0
+  cp -r $TOOLS_DIR/skulpt-0.10.0/skulpt/dist/* $THIRD_PARTY_DIR/static/skulpt-0.10.0
 fi
+
+# Checking if pip is installed. If you are having
+# trouble, please ensure that you have pip installed (see "Installing Oppia"
+# on the Oppia developers' wiki page).
+echo Checking if pip is installed on the local machine
+if ! type pip > /dev/null 2>&1 ; then
+    echo ""
+    echo "  Pip is required to install Oppia dependencies, but pip wasn't found"
+    echo "  on your local machine."
+    echo ""
+    echo "  Please see \"Installing Oppia\" on the Oppia developers' wiki page:"
+
+    if [ "${OS}" == "Darwin" ] ; then
+      echo "    https://github.com/oppia/oppia/wiki/Installing-Oppia-%28Mac-OS%29"
+    else
+      echo "    https://github.com/oppia/oppia/wiki/Installing-Oppia-%28Linux%29"
+    fi
+
+    # If pip is not installed, quit.
+    exit 1
+fi
+
+function pip_install {
+  # Attempt standard pip install, or pass in --system if the local environment requires it.
+  # See https://github.com/pypa/pip/issues/3826 for context on when this situation may occur.
+  pip install "$@" || pip install --system "$@"
+}
+
+echo Checking if pylint is installed in $TOOLS_DIR
+if [ ! -d "$TOOLS_DIR/pylint-1.9.4" ]; then
+  echo Installing Pylint
+
+  pip_install pylint==1.9.4 --target="$TOOLS_DIR/pylint-1.9.4"
+fi
+
+echo Checking if pylint-quotes is installed in $TOOLS_DIR
+if [ ! -d "$TOOLS_DIR/pylint-quotes-0.1.9" ]; then
+  echo Installing pylint-quotes
+  # Note that the URL redirects, so we pass in -L to tell curl to follow the redirect.
+  curl -o pylint-quotes-0.1.9.tar.gz -L https://github.com/edaniszewski/pylint-quotes/archive/0.1.9.tar.gz
+  tar xzf pylint-quotes-0.1.9.tar.gz -C $TOOLS_DIR
+  rm pylint-quotes-0.1.9.tar.gz
+fi
+
+# Install webtest.
+echo Checking if webtest is installed in third_party
+if [ ! -d "$TOOLS_DIR/webtest-1.4.2" ]; then
+  echo Installing webtest framework
+  # Note that the github URL redirects, so we pass in -L to tell curl to follow the redirect.
+  curl -o webtest-download.zip -L https://github.com/Pylons/webtest/archive/1.4.2.zip
+  unzip webtest-download.zip -d $TOOLS_DIR
+  rm webtest-download.zip
+fi
+
+# Install isort.
+echo Checking if isort is installed in third_party
+if [ ! -d "$TOOLS_DIR/isort-4.2.15" ]; then
+  echo Installing isort
+  # Note that the URL redirects, so we pass in -L to tell curl to follow the redirect.
+  curl -o isort-4.2.15.tar.gz -L https://pypi.python.org/packages/4d/d5/7c8657126a43bcd3b0173e880407f48be4ac91b4957b51303eab744824cf/isort-4.2.15.tar.gz
+  tar xzf isort-4.2.15.tar.gz -C $TOOLS_DIR
+  rm isort-4.2.15.tar.gz
+fi
+
+# Install pycodestyle.
+echo Checking if pycodestyle is installed in third_party
+if [ ! -d "$TOOLS_DIR/pycodestyle-2.5.0" ]; then
+  echo Installing pycodestyle
+  # Note that the URL redirects, so we pass in -L to tell curl to follow the redirect.
+  curl -o pycodestyle-2.5.0.tar.gz -L https://files.pythonhosted.org/packages/1c/d1/41294da5915f4cae7f4b388cea6c2cd0d6cd53039788635f6875dfe8c72f/pycodestyle-2.5.0.tar.gz
+  tar xzf pycodestyle-2.5.0.tar.gz -C $TOOLS_DIR
+  rm pycodestyle-2.5.0.tar.gz
+fi
+
+# Install esprima.
+echo Checking if esprima is installed in third_party
+if [ ! -d "$TOOLS_DIR/esprima-4.0.1" ]; then
+  echo Installing esprima
+  # Note that the URL redirects, so we pass in -L to tell curl to follow the redirect.
+  curl -o esprima-4.0.1.tar.gz -L https://files.pythonhosted.org/packages/cc/a1/50fccd68a12bcfc27adfc9969c090286670a9109a0259f3f70943390b721/esprima-4.0.1.tar.gz
+  tar xzf esprima-4.0.1.tar.gz -C $TOOLS_DIR
+  rm esprima-4.0.1.tar.gz
+fi
+
+# Python API for browsermob-proxy.
+echo Checking if browsermob-proxy is installed in $TOOLS_DIR
+if [ ! -d "$TOOLS_DIR/browsermob-proxy-0.7.1" ]; then
+  echo Installing browsermob-proxy
+
+  pip_install browsermob-proxy==0.7.1 --target="$TOOLS_DIR/browsermob-proxy-0.7.1"
+fi
+
+echo Checking if selenium is installed in $TOOLS_DIR
+if [ ! -d "$TOOLS_DIR/selenium-2.53.2" ]; then
+  echo Installing selenium
+
+  pip_install selenium==2.53.2 --target="$TOOLS_DIR/selenium-2.53.2"
+fi
+
+echo Checking if PIL is installed in $TOOLS_DIR
+if [ ! -d "$TOOLS_DIR/PIL-1.1.7" ]; then
+  echo Installing PIL
+
+  pip_install http://effbot.org/downloads/Imaging-1.1.7.tar.gz --target="$TOOLS_DIR/PIL-1.1.7"
+
+  if [[ $? != 0 && ${OS} == "Darwin" ]]; then
+    echo "  PIL install failed. See troubleshooting instructions at:"
+    echo "    https://github.com/oppia/oppia/wiki/Troubleshooting#mac-os"
+  fi
+fi
+
+echo Checking if PyGithub is installed in $TOOLS_DIR
+if [ ! -d "$TOOLS_DIR/PyGithub-1.43.5" ]; then
+  echo Installing PyGithub
+
+  pip install PyGithub==1.43.5 --target="$TOOLS_DIR/PyGithub-1.43.5"
+fi
+
+# install pre-push script
+echo Installing pre-push hook for git
+$PYTHON_CMD $OPPIA_DIR/scripts/pre_push_hook.py --install

@@ -16,8 +16,6 @@
 
 """Provides search services."""
 
-__author__ = 'Frederik Creemers'
-
 import datetime
 import logging
 import numbers
@@ -33,7 +31,9 @@ class SearchFailureError(Exception):
     """This error is raised when a search operation fails.
        The original_exception will point to what went wrong inside the gae sdk.
        Other platform implementations should have a similar way of revealing
-       platform specific errors."""
+       platform specific errors.
+    """
+
     def __init__(self, original_exception=None):
         super(SearchFailureError, self).__init__(
             '%s: %s' % (type(original_exception), original_exception.message))
@@ -53,7 +53,7 @@ def add_documents_to_index(documents, index, retries=DEFAULT_NUM_RETRIES):
           the document's rank.
           By default, search results are returned ordered by descending rank.
           If there is a key named 'language_code', its value will be used as
-          the document's language. Otherwise, feconf.DEFAULT_LANGUAGE_CODE is
+          the document's language. Otherwise, constants.DEFAULT_LANGUAGE_CODE is
           used.
       - index: the name of the index to insert the document into, a string.
       - retries: the number of times to retry inserting the documents.
@@ -98,6 +98,18 @@ def add_documents_to_index(documents, index, retries=DEFAULT_NUM_RETRIES):
 
 
 def _dict_to_search_document(d):
+    """Returns and converts the document dict into objects.
+
+    Args:
+        d: dict(str, str). A dict containing field names as keys and
+            corresponding field values as values.
+
+    Returns:
+        Document. The document containing fields.
+
+    Raises:
+        ValueError: The given document is not in the dict format.
+    """
     if not isinstance(d, dict):
         raise ValueError('document should be a dictionary, got %s' % type(d))
 
@@ -118,6 +130,20 @@ def _dict_to_search_document(d):
 
 
 def _make_fields(key, value):
+    """Returns the fields corresponding to the key value pair according to the
+    type of value.
+
+    Args:
+        key: str. The name of the field.
+        value: *. The field value.
+
+    Returns:
+        list(*). A list of fields.
+
+    Raises:
+        ValueError: The type of field value is not list, basestring, Number or
+            datetime.
+    """
     if isinstance(value, list):
         _validate_list(key, value)
         return [_make_fields(key, v)[0] for v in value]
@@ -128,8 +154,7 @@ def _make_fields(key, value):
     if isinstance(value, numbers.Number):
         return [gae_search.NumberField(name=key, value=value)]
 
-    if isinstance(value, datetime.datetime) or isinstance(
-            value, datetime.date):
+    if isinstance(value, (datetime.datetime, datetime.date)):
         return [gae_search.DateField(name=key, value=value)]
 
     raise ValueError(
@@ -140,18 +165,16 @@ def _make_fields(key, value):
 
 def _validate_list(key, value):
     """Validates a list to be included as document fields. The key is just
-    passed in to make better error messages."""
+    passed in to make better error messages.
+    """
 
-    for i in xrange(len(value)):
-        element = value[i]
-        if not (isinstance(element, basestring) or
-                isinstance(element, datetime.date) or
-                isinstance(element, datetime.datetime) or
-                isinstance(element, numbers.Number)):
+    for ind, element in enumerate(value):
+        if not isinstance(element, (
+                basestring, datetime.date, datetime.datetime, numbers.Number)):
             raise ValueError(
                 'All values of a multi-valued field must be numbers, strings, '
                 'date or datetime instances, The %dth value for field %s has'
-                ' type %s.' % (i, key, type(element)))
+                ' type %s.' % (ind, key, type(element)))
 
 
 def delete_documents_from_index(
@@ -173,10 +196,10 @@ def delete_documents_from_index(
             'Index must be the unicode/str name of an index, got %s'
             % type(index))
 
-    for i in xrange(len(doc_ids)):
-        if not isinstance(doc_ids[i], basestring):
+    for ind, doc_id in enumerate(doc_ids):
+        if not isinstance(doc_id, basestring):
             raise ValueError('all doc_ids must be string, got %s at index %d' %
-                             (type(doc_ids[i]), i))
+                             (type(doc_id), ind))
 
     index = gae_search.Index(index)
     try:
@@ -206,7 +229,7 @@ def clear_index(index_name):
     there are too many entries in the index.
 
     Args:
-      - index: the name of the index to delete the document from, a string.
+      - index_name: the name of the index to delete the document from, a string.
     """
     index = gae_search.Index(index_name)
 
@@ -219,8 +242,9 @@ def clear_index(index_name):
         index.delete(doc_ids)
 
 
-def search(query_string, index, cursor=None, limit=feconf.GALLERY_PAGE_SIZE,
-           sort='', ids_only=False, retries=DEFAULT_NUM_RETRIES):
+def search(query_string, index, cursor=None,
+           limit=feconf.SEARCH_RESULTS_PAGE_SIZE, sort='', ids_only=False,
+           retries=DEFAULT_NUM_RETRIES):
     """Searches for documents in an index.
 
     Args:
@@ -231,12 +255,12 @@ def search(query_string, index, cursor=None, limit=feconf.GALLERY_PAGE_SIZE,
       - cursor: a cursor string, as returned by this function. Pass this in to
           get the next 'page' of results. Leave as None to start at the
           beginning.
+      - limit: the maximum number of documents to return.
       - sort: a string indicating how to sort results. This should be a string
           of space separated values. Each value should start with a '+' or a
           '-' character indicating whether to sort in ascending or descending
           order respectively. This character should be followed by a field name
           to sort on.
-      - limit: the maximum number of documents to return.
       - ids_only: whether to only return document ids.
       - retries: the number of times to retry searching the index.
 
@@ -278,7 +302,7 @@ def search(query_string, index, cursor=None, limit=feconf.GALLERY_PAGE_SIZE,
     try:
         logging.debug('attempting a search with query %s' % query)
         results = index.search(query)
-    except gae_search.TransientError as e:
+    except Exception as e:
         logging.exception('something went wrong while searching.')
         if retries > 1:
             logging.debug('%d attempts left, retrying...' % (retries - 1))
@@ -306,9 +330,21 @@ def search(query_string, index, cursor=None, limit=feconf.GALLERY_PAGE_SIZE,
     return result_docs, result_cursor_str
 
 
-def _string_to_sort_expressions(s):
+def _string_to_sort_expressions(input_string):
+    """Returns the sorted expression of the input string.
+
+    Args:
+        input_string: str. The input string to be sorted.
+
+    Returns:
+        list(SortExpression). A list of sorted expressions.
+
+    Raises:
+        ValueError: Fields in the sort expression do not start with '+' or '-'
+            to indicate sort direction.
+    """
     sort_expressions = []
-    s_tokens = s.split()
+    s_tokens = input_string.split()
     for expression in s_tokens:
         if expression.startswith('+'):
             direction = gae_search.SortExpression.ASCENDING
@@ -319,9 +355,9 @@ def _string_to_sort_expressions(s):
                 'Fields in the sort expression must start with "+"'
                 ' or "-" to indicate sort direction.'
                 ' The field %s has no such indicator'
-                ' in expression "%s".' % (expression, s))
-        sort_expressions.append(gae_search.SortExpression(expression[1:],
-                                                          direction))
+                ' in expression "%s".' % (expression, input_string))
+        sort_expressions.append(
+            gae_search.SortExpression(expression[1:], direction))
     return sort_expressions
 
 
@@ -329,17 +365,25 @@ def get_document_from_index(doc_id, index):
     """Returns a document with a give doc_id(s) from the index.
 
     args:
-      - doc_id: a doc_id as a string
+      - doc_id: a doc_id as a string.
       - index: the name of an index, a string.
 
     returns
-      - the requested document as a dict
+      - the requested document as a dict.
     """
     index = gae_search.Index(index)
     return _search_document_to_dict(index.get(doc_id))
 
 
 def _search_document_to_dict(doc):
+    """Converts and returns the search document into a dict format.
+
+    Args:
+        doc: Document. The document to be converted into dict format.
+
+    Returns:
+        dict(str, str). The document in dict format.
+    """
     d = {'id': doc.doc_id, 'language_code': doc.language, 'rank': doc.rank}
 
     for field in doc.fields:

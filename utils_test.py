@@ -14,10 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-__author__ = 'Jeremy Emerson'
+"""Unit tests for utils.py."""
 
-import test_utils
+import copy
+import datetime
+
+# pylint: disable=relative-import
+from core.tests import test_utils
+import feconf
 import utils
+# pylint: enable=relative-import
 
 
 class UtilsTests(test_utils.GenericTestBase):
@@ -25,12 +31,12 @@ class UtilsTests(test_utils.GenericTestBase):
 
     def test_create_enum_method(self):
         """Test create_enum method."""
-        o = utils.create_enum('first', 'second', 'third')
-        self.assertEqual(o.first, 'first')
-        self.assertEqual(o.second, 'second')
-        self.assertEqual(o.third, 'third')
+        enum = utils.create_enum('first', 'second', 'third')
+        self.assertEqual(enum.first, 'first')
+        self.assertEqual(enum.second, 'second')
+        self.assertEqual(enum.third, 'third')
         with self.assertRaises(AttributeError):
-            o.fourth
+            enum.fourth  # pylint: disable=pointless-statement
 
     def test_get_comma_sep_string_from_list(self):
         """Test get_comma_sep_string_from_list method."""
@@ -105,6 +111,21 @@ class UtilsTests(test_utils.GenericTestBase):
             self.assertEqual(
                 utils.camelcase_to_hyphenated(test_case[0]), test_case[1])
 
+    def test_camelcase_to_snakecase(self):
+        """Test camelcase_to_hyphenated method."""
+        test_cases = [
+            ('AbcDef', 'abc_def'),
+            ('Abc', 'abc'),
+            ('abc_def', 'abc_def'),
+            ('Abc012Def345', 'abc012_def345'),
+            ('abcDef', 'abc_def'),
+            ('abc-def', 'abc-def'),
+        ]
+
+        for test_case in test_cases:
+            self.assertEqual(
+                utils.camelcase_to_snakecase(test_case[0]), test_case[1])
+
     def test_set_url_query_parameter(self):
         """Test set_url_query_parameter method."""
         self.assertEqual(
@@ -124,7 +145,8 @@ class UtilsTests(test_utils.GenericTestBase):
         )
 
         with self.assertRaisesRegexp(
-                Exception, 'URL query parameter name must be a string'):
+            Exception, 'URL query parameter name must be a string'
+            ):
             utils.set_url_query_parameter('http://test.com?a=b', None, 'value')
 
     def test_convert_to_hash(self):
@@ -136,6 +158,7 @@ class UtilsTests(test_utils.GenericTestBase):
         self.assertEqual(len(full_hash), 28)
         self.assertEqual(len(abbreviated_hash), 5)
         self.assertEqual(full_hash[:5], abbreviated_hash)
+        self.assertTrue(full_hash.isalnum())
 
     def test_vfs_construct_path(self):
         """Test vfs_construct_path method."""
@@ -159,3 +182,67 @@ class UtilsTests(test_utils.GenericTestBase):
         self.assertEqual(p, 'foo')
         p = utils.vfs_normpath('/foo//bar//baz//')
         self.assertEqual(p, '/foo/bar/baz')
+
+    def test_capitalize_string(self):
+        test_data = [
+            [None, None],
+            ['', ''],
+            ['a', 'A'],
+            ['A', 'A'],
+            ['1', '1'],
+            ['lowercase', 'Lowercase'],
+            ['UPPERCASE', 'UPPERCASE'],
+            ['Partially', 'Partially'],
+            ['miDdle', 'MiDdle'],
+            ['2be', '2be'],
+        ]
+
+        for datum in test_data:
+            self.assertEqual(utils.capitalize_string(datum[0]), datum[1])
+
+    def test_get_thumbnail_icon_url_for_category(self):
+        self.assertEqual(
+            utils.get_thumbnail_icon_url_for_category('Architecture'),
+            '/subjects/Architecture.svg')
+        self.assertEqual(
+            utils.get_thumbnail_icon_url_for_category('Graph Theory'),
+            '/subjects/GraphTheory.svg')
+        self.assertEqual(
+            utils.get_thumbnail_icon_url_for_category('Nonexistent'),
+            '/subjects/Lightbulb.svg')
+
+    def test_are_datetimes_close(self):
+        initial_time = datetime.datetime(2016, 12, 1, 0, 0, 0)
+        with self.swap(feconf, 'PROXIMAL_TIMEDELTA_SECS', 2):
+            self.assertTrue(utils.are_datetimes_close(
+                datetime.datetime(2016, 12, 1, 0, 0, 1),
+                initial_time))
+            self.assertFalse(utils.are_datetimes_close(
+                datetime.datetime(2016, 12, 1, 0, 0, 3),
+                initial_time))
+
+    def test_convert_to_str(self):
+        string1 = 'Home'
+        string2 = u'Лорем'
+        self.assertEqual(utils.convert_to_str(string1), string1)
+        self.assertEqual(
+            utils.convert_to_str(string2), string2.encode(encoding='utf-8'))
+
+    def test_get_hashable_value(self):
+        json1 = ['foo', 'bar', {'baz': 3}]
+        json2 = ['fee', {'fie': ['foe', 'fum']}]
+        json1_deepcopy = copy.deepcopy(json1)
+        json2_deepcopy = copy.deepcopy(json2)
+
+        test_set = {utils.get_hashable_value(json1)}
+        self.assertIn(utils.get_hashable_value(json1_deepcopy), test_set)
+        test_set.add(utils.get_hashable_value(json2))
+        self.assertEqual(
+            test_set, {
+                utils.get_hashable_value(json1_deepcopy),
+                utils.get_hashable_value(json2_deepcopy),
+            })
+
+    def test_is_valid_language_code(self):
+        self.assertTrue(utils.is_valid_language_code('en'))
+        self.assertFalse(utils.is_valid_language_code('unknown'))

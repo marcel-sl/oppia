@@ -10,6 +10,11 @@ indexes:
 # automatically uploaded to the admin console when you next deploy
 # your application using appcfg.py.
 
+- kind: ClassifierTrainingJobModel
+  properties:
+  - name: status
+  - name: next_scheduled_check_time
+
 - kind: DeleteExpCopiesRealtimeModel
   properties:
   - name: realtime_layer
@@ -29,6 +34,26 @@ indexes:
   properties:
   - name: deleted
   - name: status
+
+- kind: ExpSummaryModel
+  properties:
+  - name: deleted
+  - name: status
+  - name: first_published_msec
+    direction: desc
+
+- kind: ExpSummaryModel
+  properties:
+  - name: deleted
+  - name: status
+  - name: scaled_average_rating
+    direction: desc
+
+- kind: ExpSummaryModel
+  properties:
+  - name: owner_ids
+  - name: last_updated
+    direction: desc
 
 - kind: ExpSummaryRealtimeModel
   properties:
@@ -73,12 +98,80 @@ indexes:
   - name: deleted
   - name: thread_id
   - name: last_updated
+
+- kind: FeedbackMessageModel
+  properties:
+  - name: deleted
+  - name: thread_id
+  - name: last_updated
     direction: desc
+
+- kind: FeedbackThreadModel
+  properties:
+  - name: deleted
+  - name: exploration_id
+  - name: last_updated
+
+- kind: FeedbackThreadModel
+  properties:
+  - name: deleted
+  - name: exploration_id
+  - name: last_updated
+    direction: desc
+
+- kind: GeneralFeedbackThreadModel
+  properties:
+  - name: deleted
+  - name: entity_id
+  - name: entity_type
+  - name: last_updated
+
+- kind: GeneralFeedbackThreadModel
+  properties:
+  - name: deleted
+  - name: entity_id
+  - name: entity_type
+  - name: last_updated
+    direction: desc
+
+- kind: GeneralSuggestionModel
+  properties:
+  - name: deleted
+  - name: score_category
+  - name: status
+  - name: author_id
+
+- kind: GeneralSuggestionModel
+  properties:
+  - name: deleted
+  - name: status
+  - name: last_updated
+
+- kind: InteractionAnswerSummariesRealtimeModel
+  properties:
+  - name: realtime_layer
+  - name: created_on
 
 - kind: JobModel
   properties:
   - name: status_code
   - name: time_queued_msec
+    direction: desc
+
+- kind: QuestionSkillLinkModel
+  properties:
+  - name: skill_id
+  - name: created_on
+
+- kind: QuestionSkillLinkModel
+  properties:
+  - name: skill_id
+  - name: last_updated
+
+- kind: QuestionSkillLinkModel
+  properties:
+  - name: skill_id
+  - name: last_updated
     direction: desc
 
 - kind: RecentUpdatesRealtimeModel
@@ -91,7 +184,28 @@ indexes:
   - name: realtime_layer
   - name: created_on
 
+- kind: SentEmailModel
+  properties:
+  - name: email_hash
+  - name: sent_datetime
+
 - kind: StatisticsRealtimeModel
+  properties:
+  - name: realtime_layer
+  - name: created_on
+
+- kind: UserContributionScoringModel
+  properties:
+  - name: deleted
+  - name: user_id
+  - name: score
+
+- kind: UserImpactRealtimeModel
+  properties:
+  - name: realtime_layer
+  - name: created_on
+
+- kind: UserStatsRealtimeModel
   properties:
   - name: realtime_layer
   - name: created_on

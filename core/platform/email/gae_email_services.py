@@ -16,71 +16,151 @@
 
 """Provides email services."""
 
-__author__ = 'Sean Lip'
-
-
-from core import counters
 import feconf
 
-from google.appengine.api import app_identity
 from google.appengine.api import mail
 
 
-def send_mail_to_admin(subject, body):
-    """Enqueues a 'send email' request with the GAE mail service.
+def get_incoming_email_address(reply_to_id):
+    """Gets the incoming email address. The client is responsible for recording
+    any audit logs.
 
     Args:
-      - subject: str. The subject line of the email.
-      - body: str. The plaintext body of the email.
+        reply_to_id: str. The unique id of the sender.
+
+    Returns:
+        str. The email address of the sender.
     """
-    if feconf.CAN_SEND_EMAILS_TO_ADMIN:
-        if not mail.is_email_valid(feconf.ADMIN_EMAIL_ADDRESS):
-            raise Exception(
-                'Malformed email address: %s' %
-                feconf.ADMIN_EMAIL_ADDRESS)
+    return 'reply+%s@%s' % (reply_to_id, feconf.INCOMING_EMAILS_DOMAIN_NAME)
 
-        app_id = app_identity.get_application_id()
-        body = '(Sent from %s)\n\n%s' % (app_id, body)
 
-        mail.send_mail(
-            feconf.SYSTEM_EMAIL_ADDRESS, feconf.ADMIN_EMAIL_ADDRESS, subject,
-            body)
-        counters.EMAILS_SENT.inc()
+def _is_email_valid(email_address):
+    """Determines whether an email address is invalid.
+
+    Args:
+        email_address: str. Email address to check.
+
+    Returns:
+        bool. Whether specified email address is valid.
+    """
+    if not isinstance(email_address, basestring):
+        return False
+
+    stripped_address = email_address.strip()
+    if not stripped_address:
+        return False
+
+    return True
+
+
+def _is_sender_email_valid(sender_email):
+    """Gets the sender_email address and validates it is of the form
+    'SENDER_NAME <SENDER_EMAIL_ADDRESS>'.
+
+    Args:
+        sender_email: str. The email address of the sender.
+
+    Returns:
+        bool. Whether the sender_email is valid.
+    """
+    if not _is_email_valid(sender_email):
+        return False
+
+    split_sender_email = sender_email.split(' ')
+    if len(split_sender_email) < 2:
+        return False
+
+    email_address = split_sender_email[-1]
+    if not email_address.startswith('<') or not email_address.endswith('>'):
+        return False
+
+    return True
 
 
 def send_mail(
-        sender_email, recipient_email, subject, plaintext_body, html_body):
+        sender_email, recipient_email, subject, plaintext_body, html_body,
+        bcc_admin=False, reply_to_id=None):
     """Sends an email. The client is responsible for recording any audit logs.
 
     In general this function should only be called from
     email_manager._send_email().
 
     Args:
-      - sender_email: str. the email address of the sender. This should be in
-          the form 'SENDER_NAME <SENDER_EMAIL_ADDRESS>'.
-      - recipient_email: str. the email address of the recipient.
-      - subject: str. The subject line of the email.
-      - plaintext_body: str. The plaintext body of the email.
-      - html_body: str. The HTML body of the email. Must fit in a datastore
-          entity.
+        sender_email: str. The email address of the sender. This should be in
+            the form 'SENDER_NAME <SENDER_EMAIL_ADDRESS>'.
+        recipient_email: str. The email address of the recipient.
+        subject: str. The subject line of the email.
+        plaintext_body: str. The plaintext body of the email.
+        html_body: str. The HTML body of the email. Must fit in a datastore
+            entity.
+        bcc_admin: bool. Whether to bcc feconf.ADMIN_EMAIL_ADDRESS on the email.
+        reply_to_id: str or None. The unique reply-to id used in reply-to email
+            sent to recipient.
 
     Raises:
-      Exception: if the configuration in feconf.py forbids emails from being
-        sent.
-      ValueError: if 'sender_email' or 'recipient_email' is invalid, according
-        to App Engine.
-      (and possibly other exceptions, due to mail.send_mail() failures)
+        ValueError: If 'sender_email' or 'recipient_email' is invalid, according
+            to App Engine.
+        Exception: If the configuration in feconf.py forbids emails from being
+            sent.
     """
-    if not feconf.CAN_SEND_EMAILS_TO_USERS:
-        raise Exception('This app cannot send emails to users.')
+    if not feconf.CAN_SEND_EMAILS:
+        raise Exception('This app cannot send emails.')
 
-    if not mail.is_email_valid(sender_email):
-        raise ValueError(
-            'Malformed sender email address: %s' % sender_email)
-    if not mail.is_email_valid(recipient_email):
+    if not _is_email_valid(recipient_email):
         raise ValueError(
             'Malformed recipient email address: %s' % recipient_email)
 
-    mail.send_mail(
-        sender_email, recipient_email, subject, plaintext_body, html=html_body)
-    counters.EMAILS_SENT.inc()
+    if not _is_sender_email_valid(sender_email):
+        raise ValueError(
+            'Malformed sender email address: %s' % sender_email)
+
+    msg = mail.EmailMessage(
+        sender=sender_email, to=recipient_email,
+        subject=subject, body=plaintext_body, html=html_body)
+    if bcc_admin:
+        msg.bcc = [feconf.ADMIN_EMAIL_ADDRESS]
+    if reply_to_id:
+        msg.reply_to = get_incoming_email_address(reply_to_id)
+
+    # Send message.
+    msg.send()
+
+
+def send_bulk_mail(
+        sender_email, recipient_emails, subject, plaintext_body, html_body):
+    """Sends an email. The client is responsible for recording any audit logs.
+
+    In general this function should only be called from
+    email_manager._send_email().
+
+    Args:
+        sender_email: str. The email address of the sender. This should be in
+            the form 'SENDER_NAME <SENDER_EMAIL_ADDRESS>'.
+        recipient_emails: list(str). The list of recipients' email addresses.
+        subject: str. The subject line of the email.
+        plaintext_body: str. The plaintext body of the email.
+        html_body: str. The HTML body of the email. Must fit in a datastore
+            entity.
+
+    Raises:
+        ValueError: If 'sender_email' or 'recipient_email' is invalid, according
+            to App Engine.
+        Exception: If the configuration in feconf.py forbids emails from being
+            sent.
+    """
+    if not feconf.CAN_SEND_EMAILS:
+        raise Exception('This app cannot send emails.')
+
+    for recipient_email in recipient_emails:
+        if not _is_email_valid(recipient_email):
+            raise ValueError(
+                'Malformed recipient email address: %s' % recipient_email)
+
+    if not _is_sender_email_valid(sender_email):
+        raise ValueError(
+            'Malformed sender email address: %s' % sender_email)
+
+    for recipient_email in recipient_emails:
+        mail.send_mail(
+            sender_email, recipient_email, subject, plaintext_body,
+            html=html_body)

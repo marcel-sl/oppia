@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Python configuration for NumericInput interaction."""
+
 from extensions.interactions import base
 
 
@@ -24,7 +26,24 @@ class NumericInput(base.BaseInteraction):
     description = (
         'Allows learners to enter integers and floating point numbers.')
     display_mode = base.DISPLAY_MODE_INLINE
+    is_trainable = False
     _dependency_ids = []
     answer_type = 'Real'
+    instructions = None
+    narrow_instructions = None
+    needs_summary = False
+    can_have_solution = True
+    show_generic_submit_button = True
 
     _customization_arg_specs = []
+
+    _answer_visualization_specs = [{
+        # Table with answer counts for top N answers.
+        'id': 'FrequencyTable',
+        'options': {
+            'column_headers': ['Answer', 'Count'],
+            'title': 'Top 10 answers',
+        },
+        'calculation_id': 'Top10AnswerFrequencies',
+        'addressed_info_is_supported': True,
+    }]

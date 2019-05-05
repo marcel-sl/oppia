@@ -16,14 +16,12 @@
 
 """Registry for interactions."""
 
-__author__ = 'Sean Lip'
-
 import itertools
 import os
 import pkgutil
 
+from constants import constants
 import feconf
-import utils
 
 
 class Registry(object):
@@ -37,22 +35,26 @@ class Registry(object):
         """Get a list of all interaction ids."""
         return list(itertools.chain(*[
             interaction_category['interaction_ids']
-        for interaction_category in feconf.ALLOWED_INTERACTION_CATEGORIES]))
+            for interaction_category in constants.ALLOWED_INTERACTION_CATEGORIES
+        ]))
 
     @classmethod
     def _refresh(cls):
+        """Refreshes and updates all the interaction ids to add new interaction
+        instances to the registry.
+        """
         cls._interactions.clear()
 
         all_interaction_ids = cls.get_all_interaction_ids()
 
         # Assemble all paths to the interactions.
-        EXTENSION_PATHS = [
+        extension_paths = [
             os.path.join(feconf.INTERACTIONS_DIR, interaction_id)
             for interaction_id in all_interaction_ids]
 
         # Crawl the directories and add new interaction instances to the
         # registry.
-        for loader, name, _ in pkgutil.iter_modules(path=EXTENSION_PATHS):
+        for loader, name, _ in pkgutil.iter_modules(path=extension_paths):
             module = loader.find_module(name).load_module(name)
             clazz = getattr(module, name)
 
@@ -73,7 +75,8 @@ class Registry(object):
         """Gets an interaction by its id.
 
         Refreshes once if the interaction is not found; subsequently, throws a
-        KeyError."""
+        KeyError.
+        """
         if interaction_id not in cls._interactions:
             cls._refresh()
         return cls._interactions[interaction_id]
@@ -84,23 +87,6 @@ class Registry(object):
         return ' \n'.join([
             cls.get_interaction_by_id(interaction_id).html_body
             for interaction_id in interaction_ids])
-
-    @classmethod
-    def get_validators_html(cls, interaction_ids):
-        """Returns the HTML bodies for the interaction validators."""
-
-        # Add the base validator.
-        html_fragments = [
-            '<script>%s</script>' %
-            utils.get_file_contents(os.path.join(
-                feconf.INTERACTIONS_DIR, 'baseValidator.js'))]
-
-        # Add individual validators for each interaction.
-        html_fragments += [
-            cls.get_interaction_by_id(interaction_id).validator_html
-            for interaction_id in interaction_ids]
-
-        return ' \n'.join(html_fragments)
 
     @classmethod
     def get_deduplicated_dependency_ids(cls, interaction_ids):

@@ -16,23 +16,20 @@
 
 """System for computing recommendations for explorations and users."""
 
-__author__ = 'Xinyu Wu'
-
+import StringIO
 import csv
 import datetime
 import json
-import StringIO
 
-from core.domain import exp_services
 from core.domain import rights_manager
 from core.platform import models
-(exp_models, recommendations_models,) = models.Registry.import_models([
-    models.NAMES.exploration, models.NAMES.recommendations])
 import feconf
 
+(exp_models, recommendations_models,) = models.Registry.import_models([
+    models.NAMES.exploration, models.NAMES.recommendations])
 
-DEFAULT_TOPIC_SIMILARITIES_STRING = (
-"""Architecture,Art,Biology,Business,Chemistry,Computing,Economics,Education,Engineering,Environment,Geography,Government,Hobbies,Languages,Law,Life Skills,Mathematics,Medicine,Music,Philosophy,Physics,Programming,Psychology,Puzzles,Reading,Religion,Sport,Statistics,Welcome
+# pylint: disable=line-too-long
+DEFAULT_TOPIC_SIMILARITIES_STRING = ("""Architecture,Art,Biology,Business,Chemistry,Computing,Economics,Education,Engineering,Environment,Geography,Government,Hobbies,Languages,Law,Life Skills,Mathematics,Medicine,Music,Philosophy,Physics,Programming,Psychology,Puzzles,Reading,Religion,Sport,Statistics,Welcome
 1.0,0.9,0.2,0.4,0.1,0.2,0.3,0.3,0.6,0.6,0.4,0.2,0.5,0.5,0.5,0.3,0.5,0.3,0.3,0.5,0.4,0.1,0.6,0.1,0.1,0.1,0.1,0.1,0.3
 0.9,1.0,0.1,0.6,0.1,0.1,0.6,0.6,0.2,0.3,0.3,0.2,0.5,0.7,0.6,0.2,0.3,0.2,0.9,0.7,0.3,0.1,0.6,0.1,0.1,0.1,0.1,0.1,0.3
 0.2,0.1,1.0,0.2,0.8,0.3,0.2,0.3,0.3,0.7,0.4,0.2,0.2,0.1,0.1,0.9,0.4,0.8,0.1,0.1,0.4,0.1,0.6,0.1,0.1,0.1,0.1,0.6,0.3
@@ -62,11 +59,45 @@ DEFAULT_TOPIC_SIMILARITIES_STRING = (
 0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.2,0.1,0.1,0.1,0.2,0.6,0.1,0.1,0.3,0.1,0.1,0.1,0.1,0.3,0.1,0.2,0.1,0.1,0.2,1.0,0.3,0.3
 0.1,0.1,0.6,0.5,0.3,0.6,0.7,0.2,0.5,0.3,0.2,0.4,0.2,0.1,0.2,0.4,0.8,0.1,0.1,0.3,0.4,0.6,0.4,0.5,0.1,0.1,0.3,1.0,0.3
 0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,1.0""")
+# pylint: enable=line-too-long
+
+RECOMMENDATION_CATEGORIES = [
+    'Architecture',
+    'Art',
+    'Biology',
+    'Business',
+    'Chemistry',
+    'Computing',
+    'Economics',
+    'Education',
+    'Engineering',
+    'Environment',
+    'Geography',
+    'Government',
+    'Hobbies',
+    'Languages',
+    'Law',
+    'Life Skills',
+    'Mathematics',
+    'Medicine',
+    'Music',
+    'Philosophy',
+    'Physics',
+    'Programming',
+    'Psychology',
+    'Puzzles',
+    'Reading',
+    'Religion',
+    'Sport',
+    'Statistics',
+    'Welcome'
+]
 
 
 def get_topic_similarities_dict():
     """Returns a 2d dict of topic similarities. Creates the default similarity
-    dict if it does not exist yet."""
+    dict if it does not exist yet.
+    """
 
     topic_similarities_entity = (
         recommendations_models.TopicSimilaritiesModel.get(
@@ -79,7 +110,8 @@ def get_topic_similarities_dict():
 
 def save_topic_similarities(topic_similarities):
     """Stores topic similarities in the datastore. Returns the newly created or
-    changed entity."""
+    changed entity.
+    """
 
     topic_similarities_entity = (
         recommendations_models.TopicSimilaritiesModel.get(
@@ -102,10 +134,12 @@ def _create_default_topic_similarities():
     DEFAULT_TOPIC_SIMILARITY if the keys are different and
     SAME_TOPIC_SIMILARITY if the keys are the same.
 
-    Returns the newly created TopicSimilaritiesModel."""
+    Returns the newly created TopicSimilaritiesModel.
+    """
 
-    topic_similarities_dict = {topic: {}
-                               for topic in feconf.DEFAULT_CATEGORIES}
+    topic_similarities_dict = {
+        topic: {} for topic in RECOMMENDATION_CATEGORIES
+    }
     data = DEFAULT_TOPIC_SIMILARITIES_STRING.splitlines()
     data = list(csv.reader(data))
     topics_list = data[0]
@@ -123,10 +157,11 @@ def get_topic_similarity(topic_1, topic_2):
 
     It checks whether the two topics are in the list of default topics. If
     not, it returns the default similarity if the topics are different or 1 if
-    the topics are the same."""
+    the topics are the same.
+    """
 
-    if (topic_1 in feconf.DEFAULT_CATEGORIES and
-            topic_2 in feconf.DEFAULT_CATEGORIES):
+    if (topic_1 in RECOMMENDATION_CATEGORIES and
+            topic_2 in RECOMMENDATION_CATEGORIES):
         topic_similarities = get_topic_similarities_dict()
         return topic_similarities[topic_1][topic_2]
     else:
@@ -141,15 +176,15 @@ def get_topic_similarities_as_csv():
     string which contains the contents of a csv file.
 
     The first line is a list of the current topics. The next lines are an
-    adjacency matrix of similarities."""
-
+    adjacency matrix of similarities.
+    """
     output = StringIO.StringIO()
     writer = csv.writer(output)
-    writer.writerow(feconf.DEFAULT_CATEGORIES)
+    writer.writerow(RECOMMENDATION_CATEGORIES)
 
     topic_similarities = get_topic_similarities_dict()
-    for topic in feconf.DEFAULT_CATEGORIES:
-        topic_similarities_row = [value for key, value in sorted(
+    for topic in RECOMMENDATION_CATEGORIES:
+        topic_similarities_row = [value for _, value in sorted(
             topic_similarities[topic].iteritems())]
         writer.writerow(topic_similarities_row)
 
@@ -165,8 +200,8 @@ def _validate_topic_similarities(data):
     between 0.0 and 1.0.
 
     This function checks whether topics belong in the current list of
-    known topics, and if the adjacency matrix is valid."""
-
+    known topics, and if the adjacency matrix is valid.
+    """
     data = data.splitlines()
     data = list(csv.reader(data))
     topics_list = data[0]
@@ -178,7 +213,7 @@ def _validate_topic_similarities(data):
             'Length of topic similarities columns does not match topic list.')
 
     for topic in topics_list:
-        if topic not in feconf.DEFAULT_CATEGORIES:
+        if topic not in RECOMMENDATION_CATEGORIES:
             raise Exception('Topic %s not in list of known topics.' % topic)
 
     for index, topic in enumerate(topics_list):
@@ -216,7 +251,8 @@ def update_topic_similarities(data):
 
     The topic names should belong to the current list of topics, but they need
     not include every current topic. If a topic name is not in the data, its
-    similarities remain as the previous value or the default."""
+    similarities remain as the previous value or the default.
+    """
 
     _validate_topic_similarities(data)
 
@@ -248,23 +284,21 @@ def get_item_similarity(
     indicates the compared_exp is a better recommendation as an exploration to
     start after completing reference_exp.
 
-    Comparison of similarity is based on the similarity of exploration topics,
-    whether the explorations have the same language or author. The ranking of
-    compared_exp is increased if it is publicized or is newly updated. It
-    returns 0.0 if compared_exp is private."""
+    Comparison of similarity is based on the similarity of exploration topics
+    and whether the explorations have the same language or author. It
+    returns 0.0 if compared_exp is private.
+    """
 
     similarity_score = 0
 
-    if (compared_exp_status == rights_manager.EXPLORATION_STATUS_PRIVATE):
+    if compared_exp_status == rights_manager.ACTIVITY_STATUS_PRIVATE:
         return 0
-    elif (compared_exp_status == rights_manager.EXPLORATION_STATUS_PUBLICIZED):
-        similarity_score += 1
 
     similarity_score += get_topic_similarity(
         reference_exp_category, compared_exp_category) * 5
     if reference_exp_owner_ids == compared_exp_owner_ids:
         similarity_score += 1
-    if (reference_exp_language_code == compared_exp_language_code):
+    if reference_exp_language_code == compared_exp_language_code:
         similarity_score += 2
 
     time_now = datetime.datetime.utcnow()
@@ -277,7 +311,8 @@ def get_item_similarity(
 
 def set_recommendations(exp_id, new_recommendations):
     """Stores a list of exploration ids of recommended explorations to play
-    after completing the exploration keyed by exp_id."""
+    after completing the exploration keyed by exp_id.
+    """
 
     recommendations_models.ExplorationRecommendationsModel(
         id=exp_id, recommended_exploration_ids=new_recommendations).put()
@@ -285,7 +320,8 @@ def set_recommendations(exp_id, new_recommendations):
 
 def get_exploration_recommendations(exp_id):
     """Gets a list of ids of at most 10 recommended explorations to play
-    after completing the exploration keyed by exp_id."""
+    after completing the exploration keyed by exp_id.
+    """
 
     recommendations_model = (
         recommendations_models.ExplorationRecommendationsModel.get(

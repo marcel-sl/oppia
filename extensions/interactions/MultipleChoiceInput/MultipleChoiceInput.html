@@ -1,46 +1,8 @@
-<style>
-  .multiple-choice-form-container {
-    margin-top: -5px;
-  }
+<link rel="stylesheet" type="text/css" href="/extensions/interactions/MultipleChoiceInput/static/multiple_choice_input.css">
 
-  .multiple-choice-option-container {
-    border-bottom: thin solid #EEEEEE;
-    margin-bottom: 5px;
-  }
-
-  .multiple-choice-option-container md-input-group.md-default-theme label {
-    border-bottom: 0px;
-  }
-
-  .multiple-choice-option {
-    background: none;
-    border: none;
-    color: rgba(0,0,0,0.5);
-    margin: 0;
-    padding-left: 0;
-    padding-top: 9px;
-    text-align: left;
-    /* This is needed so that images stay bounded by the container in Firefox. */
-    width: 100%;
-  }
-
-  .multiple-choice-option:hover {
-    color: #00897B;
-  }
-</style>
-
-<script type="text/ng-template" id="interaction/MultipleChoiceInput">
-  <div class="multiple-choice-form-container">
-    <form ng-submit="submitAnswer(answer)">
-      <div class="multiple-choice-option-container" ng-repeat="choice in choices track by $index">
-        <button class="multiple-choice-option" ng-click="submitAnswer($index)">
-          <span angular-html-bind="choice"></span>
-        </button>
-      </div>
-    </form>
-  </div>
-</script>
-
-<script type="text/ng-template" id="response/MultipleChoiceInput">
-  <span angular-html-bind="response"></span>
-</script>
+<script src="/templates/dev/head/filters/ConvertToPlainTextFilter.js"></script>
+<script src="/extensions/interactions/MultipleChoiceInput/directives/OppiaInteractiveMultipleChoiceInputDirective.js"></script>
+<script src="/extensions/interactions/MultipleChoiceInput/directives/OppiaResponseMultipleChoiceInputDirective.js"></script>
+<script src="/extensions/interactions/MultipleChoiceInput/directives/OppiaShortResponseMultipleChoiceInputDirective.js"></script>
+<script src="/extensions/interactions/MultipleChoiceInput/directives/MultipleChoiceInputRulesService.js"></script>
+<script src="/extensions/interactions/MultipleChoiceInput/directives/MultipleChoiceInputValidationService.js"></script>
